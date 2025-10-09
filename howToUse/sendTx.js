@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { buildCallData, prepareForward, signForward, executeForward } from "./meta-exec-lib/src/index.js";
+import { buildCallData, prepareForward, signForward, executeForward } from "./../meta-exec-lib/src/index.js";
 import "dotenv/config";
 
 async function run() {
