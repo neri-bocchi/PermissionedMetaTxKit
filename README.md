@@ -102,7 +102,7 @@ import { buildCallData, prepareForward, signForward, executeForward } from "./..
 
 - [`deployPermissionedMetaTxHub.js`](scripts/deployPermissionedMetaTxHub.js): Despliega el hub y guarda metadatos.
 - [`deployStorage.js`](scripts/deployStorage.js): Despliega Storage y prueba funciones básicas.
-- [`admin/setupCallerAllowlist.js`](scripts/admin/setupCallerAllowlist.js): Añade relayers a la allowlist.
+- [`admin/setupCallerAllowlist.js`](scripts/admin/setupCallerAllowlist.js): Añade relayers a la allowlist. configurar en .env HUB_ADDRESS=... # Dirección del PermissionedMetaTxHub desplegado
 - [`admin/setupGasLimit.js`](scripts/admin/setupGasLimit.js): Configura límites de gas.
 - [`admin/checkGasUsage.js`](scripts/admin/checkGasUsage.js): Consulta uso de gas por bloque.
 
