@@ -183,46 +183,67 @@ run().catch(console.error);
 - [`admin/setupGasLimit.js`](scripts/admin/setupGasLimit.js): Sets gas limits.
 - [`admin/checkGasUsage.js`](scripts/admin/checkGasUsage.js): Checks per-block gas usage.
 
-## Nonce Management Details
+## Network Nonce and Sequential Nonce Management Strategies
 
-The PermissionedMetaTxHub contract implements a **flexible and secure nonce system** using a bitmap approach. This allows users to submit meta-transactions out of order and prevents replay attacks.
+In addition to the flexible bitmap nonce system, the PermissionedMetaTxHub contract also supports a **network nonce** (sometimes called "global nonce" or "sequential nonce"). This is a monotonically increasing counter for each user, similar to the standard Ethereum transaction nonce.
 
-### How Nonces Work
+### Network Nonce
 
-- **Bitmap Nonce Tracking:**  
-  Each user (signer) has a bitmap associated with their address. Each bit represents whether a specific nonce has been used.
-- **Out-of-Order Execution:**  
-  Users can sign and submit meta-transactions with any nonce value (within a defined range), and the contract will accept them as long as the nonce hasn't been used before.
-- **Replay Protection:**  
-  Once a nonce is used, its corresponding bit is set in the bitmap, preventing the same meta-transaction from being replayed.
-- **Nonce Cancellation:**  
-  Users can proactively cancel a nonce by submitting a cancellation meta-transaction, which sets the bit for that nonce in the bitmap without executing any call.
+- **Definition:**  
+  The network nonce is an integer that increases with every successful meta-transaction for a user. It can be used for strictly sequential meta-transaction flows.
+- **Usage:**  
+  If you want to enforce strict ordering (i.e., meta-tx N+1 can only be executed after meta-tx N), you can always use the current network nonce for your next meta-transaction.
+- **Retrieval:**  
+  You can query the current network nonce for a user via a contract view function (e.g., `getNetworkNonce(address)`).
 
-### Usage Example
+### Sequential Nonce Management Strategies
 
-When preparing a meta-transaction with the client library, you specify the nonce:
+Depending on your application's needs, you can choose between bitmap nonces (out-of-order, parallel) and network nonces (sequential, ordered):
+
+#### 1. Strict Sequential Flow
+
+- Always use the current network nonce for each new meta-transaction.
+- Wait for confirmation before preparing/signing the next meta-tx.
+- Ensures that meta-transactions are executed in the exact order they were signed.
+
+#### 2. Optimistic Sequential Flow
+
+- Prepare and sign several meta-transactions in advance, each with incremented network nonce.
+- Submit them in order, but if one fails, subsequent meta-txs will be rejected until the gap is resolved.
+- Useful for batch operations where order matters.
+
+#### 3. Parallel/Out-of-Order Flow (Bitmap Nonce)
+
+- Assign arbitrary, unused bitmap nonces to each meta-transaction.
+- Submit and execute meta-txs in any order.
+- Ideal for workflows where transactions are independent and can be processed in parallel.
+
+#### 4. Hybrid Strategy
+
+- Use network nonce for critical, ordered operations.
+- Use bitmap nonces for parallelizable or less critical actions.
+
+### Example: Querying and Using Network Nonce
 
 ```js
-const userNonce = Math.floor(Math.random() * 1000); // Choose any unused nonce
+// Query current network nonce from the contract
+const currentNetworkNonce = await hubContract.getNetworkNonce(user.address);
+
+// Use it for the next meta-tx
 const prep = await prepareForward({
   // ...
-  nonce: userNonce,
+  nonce: currentNetworkNonce,
   // ...
 });
 ```
 
-After execution, the nonce is marked as used in the contract's bitmap for that user.
+### Recommendations
 
-### Benefits
+- For most dApps, bitmap nonces offer maximum flexibility and parallelism.
+- For financial or stateful operations requiring strict order, use the network nonce.
+- Always track used nonces (bitmap or network) on the client side to avoid accidental replay or gaps.
 
-- **Parallel Signing:**  
-  Users can sign multiple meta-transactions in advance and submit them in any order.
-- **Efficient Cancellation:**  
-  If a signed meta-transaction is leaked or compromised, the user can cancel its nonce before it is executed.
-- **Scalability:**  
-  The bitmap approach is gas-efficient and scalable for large numbers of meta-transactions.
-
-For more details, see the implementation in [`PermissionedMetaTxHub.sol`](contracts/PermissionedMetaTxHub.sol) and usage in [`howToUse/sendTx.js`](howToUse/sendTx.js).
+For more details, see the contract's documentation and the client library usage examples.
 
 
 ## Contract Verification
