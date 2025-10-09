@@ -1,121 +1,197 @@
 # PermissionedMetaTxKit
 
-Este proyecto implementa un sistema avanzado para la ejecución de meta-transacciones EIP-712 en Ethereum, con control de permisos, gestión flexible de nonces, allowlist de relayers y cuotas de gas por bloque. Incluye contratos inteligentes, scripts de administración/despliegue y una librería para clientes.
+This project implements an advanced system for EIP-712 meta-transaction execution on Ethereum, featuring permission control, flexible nonce management, relayer allowlist, and per-block gas quotas. It includes smart contracts, deployment/admin scripts, and a client library.
 
-## Estructura del proyecto
+## Project Structure
 
 ```
-contracts/                  # Contratos Solidity principales
-deployments/                # Metadatos de despliegue por red
-meta-exec-lib/              # Librería JS para clientes/metatx
-scripts/                    # Scripts de despliegue y administración
-howToUse/                   # Ejemplos de uso de la librería
-test/                       # Tests de ejemplo (Hardhat/Chai)
-ignition/                   # Módulos de despliegue Ignition
+contracts/                  # Main Solidity contracts
+deployments/                # Deployment metadata per network
+meta-exec-lib/              # JS library for client/meta-tx
+scripts/                    # Deployment and admin scripts
+howToUse/                   # Usage examples for the library
+test/                       # Example tests (Hardhat/Chai)
+ignition/                   # Ignition deployment modules
 ```
 
-## Contratos principales
+## Main Contracts
 
-- [`PermissionedMetaTxHub.sol`](contracts/PermissionedMetaTxHub.sol): Hub de coordinación de meta-transacciones con EIP-712, control de relayers, nonces bitmap, cancelación de firmas, validación ERC-1271 y cuotas de gas por bloque.
-- [`Storage.sol`](contracts/Storage.sol): Contrato de ejemplo para almacenar y recuperar un número, usado en pruebas y ejemplos.
+- [`PermissionedMetaTxHub.sol`](contracts/PermissionedMetaTxHub.sol): Coordination hub for EIP-712 meta-transactions, relayer control, bitmap nonces, signature cancellation, ERC-1271 validation, and per-block gas quotas.
+- [`Storage.sol`](contracts/Storage.sol): Example contract to store and retrieve a number, used for tests and demos.
 
-## Instalación
+## Installation
 
-1. Clona el repositorio y entra en la carpeta.
-2. Instala dependencias:
+1. Clone the repository and enter the folder.
+2. Install dependencies:
 
    ```sh
    npm install
    ```
 
-3. Crea un archivo `.env` con tus claves y RPC:
+3. Create a `.env` file with your keys and RPC:
 
    ```
    RPC_URL=...
    RELAYER_PK=...
    SENDER_PK=...
-   HUB_ADDRESS=... # Dirección del PermissionedMetaTxHub desplegado
+   HUB_ADDRESS=... # Address of deployed PermissionedMetaTxHub
    ```
 
-## Despliegue de contratos
+## Contract Deployment
 
-### Usando Hardhat
+### Using Hardhat
 
-- Desplegar PermissionedMetaTxHub:
+- Deploy PermissionedMetaTxHub:
 
   ```sh
   npx hardhat run scripts/deployPermissionedMetaTxHub.js --network amoy
   ```
 
-- Desplegar Storage:
+- Deploy Storage:
 
   ```sh
   npx hardhat run scripts/deployStorage.js --network amoy
   ```
 
-- Los metadatos de despliegue se guardan en [`deployments/`](deployments/).
+- Deployment metadata is saved in [`deployments/`](deployments/).
 
-### Usando Ignition
+### Using Ignition
 
-Ejemplo para Lock:
+Example for Lock:
 
 ```sh
 npx hardhat ignition deploy ./ignition/modules/Lock.js
 ```
 
-## Administración del Hub
+## Hub Administration
 
-- **Allowlist de relayers:**  
-  Añade el relayer autorizado con:
+- **Relayer allowlist:**  
+  Add an authorized relayer:
 
   ```sh
   node scripts/admin/setupCallerAllowlist.js
   ```
 
-- **Cuota de gas por bloque:**  
-  Configura el límite de gas por bloque para un relayer:
+- **Per-block gas quota:**  
+  Set the gas limit for a relayer:
 
   ```sh
   node scripts/admin/setupGasLimit.js [callerAddress] [limit]
   ```
 
-- **Consulta de uso de gas:**  
-  Verifica el consumo de gas actual:
+- **Check gas usage:**  
+  View current gas usage:
 
   ```sh
   node scripts/admin/checkGasUsage.js [callerAddress]
   ```
 
-## Uso de la librería meta-exec-lib
+## Client Library: meta-exec-lib
 
-La librería [`meta-exec-lib`](meta-exec-lib/src/index.js) permite construir, firmar y enviar meta-transacciones EIP-712.
+The [`meta-exec-lib`](meta-exec-lib/src/index.js) library provides utilities to build, sign, and send EIP-712 meta-transactions compatible with [`PermissionedMetaTxHub.sol`](contracts/PermissionedMetaTxHub.sol).
 
-Ejemplo de uso:  
-Ver [`howToUse/sendTx.js`](howToUse/sendTx.js):
+### Main Functions
+
+- [`buildCallData`](meta-exec-lib/src/index.js): Encodes the calldata for the target contract.
+- [`prepareForward`](meta-exec-lib/src/index.js): Prepares the Forward struct and EIP-712 domain/types/message for signing.
+- [`signForward`](meta-exec-lib/src/index.js): Signs the Forward struct using EIP-712.
+- [`executeForward`](meta-exec-lib/src/index.js): Relayer executes the meta-transaction on-chain.
+
+### Example Usage
+
+See [`howToUse/sendTx.js`](howToUse/sendTx.js):
 
 ```js
+import { ethers } from "ethers";
 import { buildCallData, prepareForward, signForward, executeForward } from "./../meta-exec-lib/src/index.js";
-// ...ver ejemplo completo en el archivo...
+import "dotenv/config";
+
+async function run() {
+  const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+
+  // User signs the meta-tx, relayer executes it
+  const user    = new ethers.Wallet(process.env.SENDER_PK, provider);
+  const relayer = new ethers.Wallet(process.env.RELAYER_PK, provider);
+
+  // Addresses
+  const metaAddress   = "0x094815651AEe2CC0ea2445C34fc327323165025a";
+  const targetAddress = "0x98F6431E1CcdEc19087e3cE497275B2296fE46E7";
+
+  // Prepare calldata for Storage.store(uint256)
+  const random = Math.floor(Math.random() * 1000);
+  const callData = buildCallData(["function store(uint256)"], "store", [random]);
+
+  // Prepare Forward struct
+  const space = 0;
+  const userNonce = Math.floor(Math.random() * 1000);
+
+  const prep = await prepareForward({
+    provider,
+    metaAddress,
+    hasCaller: true,
+    from: user.address,
+    to: targetAddress,
+    callData,
+    caller: relayer.address,
+    value: 0n,
+    space: space,
+    nonce: userNonce,
+    deadlineSec: 24 * 60 * 60
+  });
+
+  // User signs the Forward struct
+  const sig = await signForward(user, prep.domain, prep.types, prep.message);
+
+  // Relayer executes the meta-tx
+  const tx = await executeForward({
+    provider,
+    metaAddress,
+    fTuple: prep.fTuple,
+    callData: prep.callData,
+    signature: sig,
+    relayer,
+    hasCaller: true
+  });
+
+  console.log("tx:", tx.hash);
+  await tx.wait();
+  console.log("store executed with user nonce:", userNonce.toString());
+}
+
+run().catch(console.error);
 ```
 
-## Scripts principales
+#### Typical Flow
 
-- [`deployPermissionedMetaTxHub.js`](scripts/deployPermissionedMetaTxHub.js): Despliega el hub y guarda metadatos.
-- [`deployStorage.js`](scripts/deployStorage.js): Despliega Storage y prueba funciones básicas.
-- [`admin/setupCallerAllowlist.js`](scripts/admin/setupCallerAllowlist.js): Añade relayers a la allowlist. configurar en .env HUB_ADDRESS=... # Dirección del PermissionedMetaTxHub desplegado
-- [`admin/setupGasLimit.js`](scripts/admin/setupGasLimit.js): Configura límites de gas.
-- [`admin/checkGasUsage.js`](scripts/admin/checkGasUsage.js): Consulta uso de gas por bloque.
+1. **User** prepares and signs a meta-transaction using their private key.
+2. **Relayer** receives the signed meta-tx and submits it to [`PermissionedMetaTxHub.sol`](contracts/PermissionedMetaTxHub.sol).
+3. The hub contract validates the signature, nonce, relayer allowlist, and gas quota before executing the target contract call.
 
+#### Advanced Features
 
-## Verificación de contratos
+- Supports out-of-order nonces (bitmap-based).
+- Relayer allowlist for permissioned execution.
+- Per-block gas quota enforcement.
+- ERC-1271 contract signature validation.
+- Meta-transaction cancellation via signature.
 
-Tras el despliegue, puedes verificar los contratos en el block explorer:
+## Main Scripts
+
+- [`deployPermissionedMetaTxHub.js`](scripts/deployPermissionedMetaTxHub.js): Deploys the hub and saves metadata.
+- [`deployStorage.js`](scripts/deployStorage.js): Deploys Storage and tests basic functions.
+- [`admin/setupCallerAllowlist.js`](scripts/admin/setupCallerAllowlist.js): Adds relayers to the allowlist. Set `.env` HUB_ADDRESS to the deployed PermissionedMetaTxHub address.
+- [`admin/setupGasLimit.js`](scripts/admin/setupGasLimit.js): Sets gas limits.
+- [`admin/checkGasUsage.js`](scripts/admin/checkGasUsage.js): Checks per-block gas usage.
+
+## Contract Verification
+
+After deployment, you can verify contracts on the block explorer:
 
 ```sh
 npx hardhat verify --network amoy <contractAddress>
 ```
 
-## Recursos y referencias
+## Resources & References
 
 - [PermissionedMetaTxHub.sol](contracts/PermissionedMetaTxHub.sol)
 - [meta-exec-lib/src/index.js](meta-exec-lib/src/index.js)
@@ -125,5 +201,5 @@ npx hardhat verify --network amoy <contractAddress>
 
 ---
 
-**Autor:** Luis Ranieri Bocchi  
-**Licencia:** MIT
+**Author:** Luis Ranieri Bocchi  
+**License:** MIT
