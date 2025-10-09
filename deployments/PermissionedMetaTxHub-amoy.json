@@ -1,0 +1,10 @@
+{
+  "contractName": "PermissionedMetaTxHub",
+  "address": "0x6b01Ec0D2bc47579F9c9CCEC3BA0ac8eC0Cd0FeD",
+  "network": "amoy",
+  "chainId": "80002",
+  "txHash": "0x87ace1fa14816da4445e544ed21a3030687fbcbe439d2efcde49c2658ddb9657",
+  "deployer": "0xA7293f15A7c1cF346aafD603a8D0E1Bc681d7b45",
+  "timestamp": "2025-10-09T00:36:15.037Z",
+  "gasUsed": "2818221"
+}

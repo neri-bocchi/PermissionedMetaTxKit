@@ -1,0 +1,12 @@
+{
+  "contractName": "Storage",
+  "address": "0x98F6431E1CcdEc19087e3cE497275B2296fE46E7",
+  "network": "amoy",
+  "chainId": "80002",
+  "txHash": "0xe4a7ace6cf9cd95436cac355041fc86aa56858c4b055fdedfe5e6b556251ac7a",
+  "deployer": "0xA7293f15A7c1cF346aafD603a8D0E1Bc681d7b45",
+  "owner": "0xA7293f15A7c1cF346aafD603a8D0E1Bc681d7b45",
+  "timestamp": "2025-10-08T03:25:54.945Z",
+  "gasUsed": "392027",
+  "initialValue": "43"
+}

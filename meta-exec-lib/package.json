@@ -1,0 +1,10 @@
+{
+  "name": "meta-exec-lib",
+  "version": "0.2.0",
+  "type": "module",
+  "main": "src/index.js",
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.15.0"
+  }
+}

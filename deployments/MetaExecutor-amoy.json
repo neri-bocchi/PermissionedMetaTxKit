@@ -1,0 +1,10 @@
+{
+  "contractName": "MetaExecutor",
+  "address": "0x6815577421700b2452FDeA8405A587376581ff3B",
+  "network": "amoy",
+  "chainId": "80002",
+  "txHash": "0x6be0fe71e9e63bdf7a8d37683056547034eab65aafff8f8beb4202737175983d",
+  "deployer": "0xA7293f15A7c1cF346aafD603a8D0E1Bc681d7b45",
+  "timestamp": "2025-10-08T20:19:33.637Z",
+  "gasUsed": "2818113"
+}
