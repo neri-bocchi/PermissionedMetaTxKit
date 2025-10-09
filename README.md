@@ -183,67 +183,78 @@ run().catch(console.error);
 - [`admin/setupGasLimit.js`](scripts/admin/setupGasLimit.js): Sets gas limits.
 - [`admin/checkGasUsage.js`](scripts/admin/checkGasUsage.js): Checks per-block gas usage.
 
-## Network Nonce and Sequential Nonce Management Strategies
+## Nonce Management in PermissionedMetaTxHub
 
-In addition to the flexible bitmap nonce system, the PermissionedMetaTxHub contract also supports a **network nonce** (sometimes called "global nonce" or "sequential nonce"). This is a monotonically increasing counter for each user, similar to the standard Ethereum transaction nonce.
+The `PermissionedMetaTxHub` contract implements a **bitmap-based nonce system** for meta-transactions, which is independent from the standard Ethereum network nonce.
 
-### Network Nonce
+### 1. RelayHub Nonce (Bitmap Nonce)
 
-- **Definition:**  
-  The network nonce is an integer that increases with every successful meta-transaction for a user. It can be used for strictly sequential meta-transaction flows.
-- **Usage:**  
-  If you want to enforce strict ordering (i.e., meta-tx N+1 can only be executed after meta-tx N), you can always use the current network nonce for your next meta-transaction.
-- **Retrieval:**  
-  You can query the current network nonce for a user via a contract view function (e.g., `getNetworkNonce(address)`).
+- **Purpose:**  
+  Allows users to execute meta-transactions out of order and in parallel, with strong replay protection.
+- **How it works:**  
+  - Each `(user, space)` pair has a bitmap, where each bit represents a nonce (0, 1, 2, ...).
+  - When a meta-transaction is executed or cancelled, its nonce bit is set using `_consumeNonce`.
+  - The contract checks if a nonce is used via `isNonceUsed(address user, uint32 space, uint256 nonce)`.
+  - Nonces can be arbitrary and do not need to be sequential.
+- **Benefits:**  
+  - Users can sign and submit multiple meta-transactions with different nonces, in any order.
+  - Prevents replay attacks: once a nonce is used, it cannot be reused.
+  - Supports parallel workflows and batch operations.
 
-### Sequential Nonce Management Strategies
+**Example:**  
+If Alice signs meta-txs with nonces 1, 5, and 42 in space 0, she can submit them in any order. The contract will reject any attempt to reuse those nonces.
 
-Depending on your application's needs, you can choose between bitmap nonces (out-of-order, parallel) and network nonces (sequential, ordered):
+### 2. Network Nonce (Ethereum Transaction Nonce)
 
-#### 1. Strict Sequential Flow
+- **Purpose:**  
+  Enforces strict sequential ordering of transactions sent directly by an Ethereum account.
+- **How it works:**  
+  - Every Ethereum account has a monotonically increasing nonce managed by the protocol.
+  - Transaction N+1 cannot be mined until transaction N is confirmed.
+- **Benefits:**  
+  - Guarantees strict ordering of direct Ethereum transactions.
+  - Prevents replay at the protocol level.
 
-- Always use the current network nonce for each new meta-transaction.
-- Wait for confirmation before preparing/signing the next meta-tx.
-- Ensures that meta-transactions are executed in the exact order they were signed.
+**Note:**  
+The RelayHub nonce system is **independent** from the network nonce. Meta-transactions executed via PermissionedMetaTxHub do not consume the sender's Ethereum network nonce.
 
-#### 2. Optimistic Sequential Flow
+---
 
-- Prepare and sign several meta-transactions in advance, each with incremented network nonce.
-- Submit them in order, but if one fails, subsequent meta-txs will be rejected until the gap is resolved.
+## Sequential Nonce Management Strategies for Meta-Transactions
+
+If your application requires strict ordering (like the network nonce), you can implement your own strategies using the RelayHub's bitmap nonces:
+
+### Strict Sequential Strategy
+
+- Always use the next available nonce (e.g., highest used nonce + 1) for each new meta-transaction.
+- Wait for confirmation before signing the next meta-tx.
+- Ensures meta-transactions are executed in the exact order they were signed.
+
+### Optimistic Sequential Strategy
+
+- Sign several meta-txs with sequential nonces.
+- Submit them in order; if one fails, subsequent ones will be rejected until the gap is resolved.
 - Useful for batch operations where order matters.
 
-#### 3. Parallel/Out-of-Order Flow (Bitmap Nonce)
+### Parallel/Out-of-Order Strategy
 
 - Assign arbitrary, unused bitmap nonces to each meta-transaction.
 - Submit and execute meta-txs in any order.
 - Ideal for workflows where transactions are independent and can be processed in parallel.
 
-#### 4. Hybrid Strategy
+### Hybrid Strategy
 
-- Use network nonce for critical, ordered operations.
-- Use bitmap nonces for parallelizable or less critical actions.
+- Use sequential nonces for critical, ordered operations.
+- Use arbitrary nonces for parallelizable or less critical actions.
 
-### Example: Querying and Using Network Nonce
+---
 
-```js
-// Query current network nonce from the contract
-const currentNetworkNonce = await hubContract.getNetworkNonce(user.address);
+**Summary:**  
+- The RelayHub nonce system is flexible and allows parallel, out-of-order meta-tx execution.
+- The network nonce is strict and sequential, used for direct Ethereum transactions.
+- You can implement sequential flows in RelayHub by managing nonces on the client side.
 
-// Use it for the next meta-tx
-const prep = await prepareForward({
-  // ...
-  nonce: currentNetworkNonce,
-  // ...
-});
-```
-
-### Recommendations
-
-- For most dApps, bitmap nonces offer maximum flexibility and parallelism.
-- For financial or stateful operations requiring strict order, use the network nonce.
-- Always track used nonces (bitmap or network) on the client side to avoid accidental replay or gaps.
-
-For more details, see the contract's documentation and the client library usage examples.
+For more details, see the contract [`PermissionedMetaTxHub.sol`](contracts/PermissionedMetaTxHub.sol) and the client library usage examples.
 
 
 ## Contract Verification
