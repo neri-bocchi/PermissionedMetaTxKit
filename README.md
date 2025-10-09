@@ -106,13 +106,6 @@ import { buildCallData, prepareForward, signForward, executeForward } from "./..
 - [`admin/setupGasLimit.js`](scripts/admin/setupGasLimit.js): Configura límites de gas.
 - [`admin/checkGasUsage.js`](scripts/admin/checkGasUsage.js): Consulta uso de gas por bloque.
 
-## Tests
-
-Ejemplo de test en [`test/Lock.js`](test/Lock.js) usando Hardhat y Chai.
-
-```sh
-npx hardhat test
-```
 
 ## Verificación de contratos
 
