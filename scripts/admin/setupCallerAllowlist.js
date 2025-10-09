@@ -6,14 +6,17 @@ async function main() {
   const rpc = process.env.RPC_URL;
   const provider = new ethers.JsonRpcProvider(rpc);
 
+const address_to_allow = process.argv[2];
   // Load the owner wallet (must be the deployer/owner of the contract)
-  const owner = new ethers.Wallet(process.env.RELAYER_PK, provider);
+//  const owner = new ethers.Wallet(process.env.RELAYER_PK, provider);
+
+   const relayer = new ethers.Wallet(process.env.RELAYER_PK, provider);
 
   // Address of the relayer that will be added to the caller allowlist
-  const relayerAddress = owner.address; // In this example, using the same wallet
+//  const relayerAddress = owner.address; // In this example, using the same wallet
 
   // PermissionedMetaTxHub contract address and ABI
-  const hubAddress = ethers.getAddress(process.env.HUB_ADDRESS);
+  const hubContractAddress = ethers.getAddress(process.env.HUB_ADDRESS);
   const hubAbi = [
     "function setCallerAllowed(address caller, bool allowed) external",
     "function isCallerAllowed(address) view returns (bool)",
@@ -21,15 +24,15 @@ async function main() {
   ];
 
   // Initialize contract instance
-  const hub = new ethers.Contract(hubAddress, hubAbi, owner);
+  const hub = new ethers.Contract(hubContractAddress, hubAbi, relayer);
 
-  console.log("Owner address:", owner.address);
-  console.log("Relayer address to allowlist:", relayerAddress);
-  console.log("PermissionedMetaTxHub address:", hubAddress);
+  console.log("Owner address:", relayer.address);
+  console.log("Relayer address to allowlist:", address_to_allow);
+  console.log("PermissionedMetaTxHub contract address:", hubContractAddress);
 
   try {
     // Retrieve and verify current contract owner
-    const contractOwner = await hub.owner();
+    const contractOwner = await hubContractAddress.owner();
     console.log("Contract owner:", contractOwner);
 
     if (contractOwner.toLowerCase() !== owner.address.toLowerCase()) {

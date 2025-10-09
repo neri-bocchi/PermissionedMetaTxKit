@@ -1,12 +1,10 @@
 {
   "contractName": "Storage",
-  "address": "0x98F6431E1CcdEc19087e3cE497275B2296fE46E7",
+  "address": "0xc853D5b71C0ACbAD687EF119f4080f52f514a2bb",
   "network": "amoy",
   "chainId": "80002",
-  "txHash": "0xe4a7ace6cf9cd95436cac355041fc86aa56858c4b055fdedfe5e6b556251ac7a",
+  "txHash": "0x6147478843b1ff88c948287b4c0626cc0451ca9d80f66e43b5f8fbe5bebb4998",
   "deployer": "0xA7293f15A7c1cF346aafD603a8D0E1Bc681d7b45",
-  "owner": "0xA7293f15A7c1cF346aafD603a8D0E1Bc681d7b45",
-  "timestamp": "2025-10-08T03:25:54.945Z",
-  "gasUsed": "392027",
-  "initialValue": "43"
+  "timestamp": "2025-10-09T18:19:57.388Z",
+  "gasUsed": "392027"
 }

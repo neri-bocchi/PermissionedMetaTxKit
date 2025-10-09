@@ -158,7 +158,7 @@ contract PermissionedMetaTxHub is EIP712, Ownable {
             assembly {
                 deployed := create(callvalue(), add(data.offset, 0x20), data.length)
             }
-            require(deployed != address(0), "create failed");
+            require(deployed != address(0), "METATXHUB: create failed");
             emit ContractDeployed(f.from, deployed, f.dataHash);
         } else {
             (bool ok, bytes memory ret) = f.to.call{value: f.value}(data);

@@ -41,7 +41,7 @@ async function main() {
   console.log("🌐 Network:", network.name, "(" + network.chainId + ")");
 
   // Gas used on deployment (from receipt)
-  const receipt = await hub.deploymentTransaction().wait();
+  const receipt = await hub.deploymentTransaction({gasLimit: sfsfd}).wait();
   console.log("⛽ Gas used:", receipt.gasUsed.toString());
 
   // Optionally print a verification command and persist metadata

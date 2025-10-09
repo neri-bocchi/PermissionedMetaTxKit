@@ -14,7 +14,7 @@ async function run() {
   const random = Math.floor(Math.random() * 1000);
   const callData = buildCallData(["function store(uint256)"], "store", [random]);
 
-  const space = 0;
+  const space = 1500;
   const randomNumber = Math.floor(Math.random() * 1000);
   const userNonce = randomNumber;
 
