@@ -183,6 +183,48 @@ run().catch(console.error);
 - [`admin/setupGasLimit.js`](scripts/admin/setupGasLimit.js): Sets gas limits.
 - [`admin/checkGasUsage.js`](scripts/admin/checkGasUsage.js): Checks per-block gas usage.
 
+## Nonce Management Details
+
+The PermissionedMetaTxHub contract implements a **flexible and secure nonce system** using a bitmap approach. This allows users to submit meta-transactions out of order and prevents replay attacks.
+
+### How Nonces Work
+
+- **Bitmap Nonce Tracking:**  
+  Each user (signer) has a bitmap associated with their address. Each bit represents whether a specific nonce has been used.
+- **Out-of-Order Execution:**  
+  Users can sign and submit meta-transactions with any nonce value (within a defined range), and the contract will accept them as long as the nonce hasn't been used before.
+- **Replay Protection:**  
+  Once a nonce is used, its corresponding bit is set in the bitmap, preventing the same meta-transaction from being replayed.
+- **Nonce Cancellation:**  
+  Users can proactively cancel a nonce by submitting a cancellation meta-transaction, which sets the bit for that nonce in the bitmap without executing any call.
+
+### Usage Example
+
+When preparing a meta-transaction with the client library, you specify the nonce:
+
+```js
+const userNonce = Math.floor(Math.random() * 1000); // Choose any unused nonce
+const prep = await prepareForward({
+  // ...
+  nonce: userNonce,
+  // ...
+});
+```
+
+After execution, the nonce is marked as used in the contract's bitmap for that user.
+
+### Benefits
+
+- **Parallel Signing:**  
+  Users can sign multiple meta-transactions in advance and submit them in any order.
+- **Efficient Cancellation:**  
+  If a signed meta-transaction is leaked or compromised, the user can cancel its nonce before it is executed.
+- **Scalability:**  
+  The bitmap approach is gas-efficient and scalable for large numbers of meta-transactions.
+
+For more details, see the implementation in [`PermissionedMetaTxHub.sol`](contracts/PermissionedMetaTxHub.sol) and usage in [`howToUse/sendTx.js`](howToUse/sendTx.js).
+
+
 ## Contract Verification
 
 After deployment, you can verify contracts on the block explorer:
