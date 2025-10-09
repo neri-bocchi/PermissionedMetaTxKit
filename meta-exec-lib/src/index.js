@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 import {
-  META_ABI_PRO, META_ABI_BASIC,
-  EXECUTE_SIG_PRO, EXECUTE_SIG_BASIC
+  META_ABI,
+  EXECUTE_SIG
 } from "./abis.js";
 
 /** Codifica calldata del contrato destino. */
@@ -79,7 +79,7 @@ export async function prepareForward({
     callData,
     dataHash,
     chainId,
-    executeSignature: hasCaller ? EXECUTE_SIG_PRO : EXECUTE_SIG_BASIC
+    EXECUTE_SIG
   };
 }
 
@@ -91,6 +91,9 @@ export function signForward(userWallet, domain, types, message) {
 /**
  * Ejecuta la metatx con el relayer.
  */
+
+
+
 export async function executeForward({
   provider,
   metaAddress,
@@ -102,10 +105,14 @@ export async function executeForward({
   hasCaller = true,
   checkAllowlist = true
 }) {
+
+console.log("callData length:", callData.length);
+console.log("callData (hex):", callData);
+
   const metaAddr   = ethers.getAddress(metaAddress);
-  const executeSig = hasCaller ? EXECUTE_SIG_PRO : EXECUTE_SIG_BASIC;
+  const executeSig = EXECUTE_SIG;
   const metaIface  = new ethers.Interface([`function ${executeSig} payable`]);
-  const metaAbi    = hasCaller ? META_ABI_PRO : META_ABI_BASIC;
+  const metaAbi    = META_ABI;
   const meta       = new ethers.Contract(metaAddr, metaAbi, provider);
 
   const execData = metaIface.encodeFunctionData("execute", [fTuple, callData, signature]);

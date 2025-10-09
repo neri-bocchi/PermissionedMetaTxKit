@@ -23,7 +23,7 @@ async function main() {
   const limit = argLimit ? BigInt(argLimit) : 0n; // 0 = no limit
 
   // MetaExecutor address (update here if needed)
-  const metaAddr = ethers.getAddress("0x094815651AEe2CC0ea2445C34fc327323165025a");
+  const metaAddr = ethers.getAddress(process.env.HUB_ADDRESS);
 
   const metaAbi = [
     "function setGasLimitPerBlock(address caller, uint256 limit) external",
@@ -33,10 +33,10 @@ async function main() {
 
   const meta = new ethers.Contract(metaAddr, metaAbi, owner);
 
-  console.log("Owner (sender):", owner.address);
-  console.log("Target caller :", caller);
-  console.log("New limit     :", limit.toString());
-  console.log("MetaExecutor  :", metaAddr);
+  console.log("Owner (sender)         :", owner.address);
+  console.log("Target caller          :", caller);
+  console.log("New limit              :", limit.toString());
+  console.log("PermissionedMetaTxHub  :", metaAddr);
 
   // Verify ownership
   const contractOwner = await meta.owner();

@@ -1,69 +1,96 @@
-import hre from "hardhat";
-import fs from "fs";
+import { ethers } from "ethers";
+import fs from "node:fs";
 import dotenv from "dotenv";
 dotenv.config();
 
+import {
+  prepareForward,
+  signForward,
+  executeForward
+} from "../meta-exec-lib/src/index.js";
+import { randomInt } from "node:crypto";
+
+const RPC_URL = process.env.RPC_URL;
+const SIGNER_PK = process.env.SENDER_PK;
+const RELAYER_PK = process.env.RELAYER_PK;
+const HUB_ADDRESS = process.env.HUB_ADDRESS;
+const STORE_ARTIFACT = "./artifacts/contracts/Storage.sol/Storage.json";
+const HAS_CALLER = "true";
+const SPACE = "0";
+const VALUE_WEI = "0";
+const DEADLINE_SEC = "1200";
+const CALLER = new ethers.Wallet(RELAYER_PK).address;
+
+
 async function main() {
-  console.log("Starting Storage deployment...");
+  const provider = new ethers.JsonRpcProvider(RPC_URL);
+  const signer = new ethers.Wallet(SIGNER_PK, provider);
+  const relayer = new ethers.Wallet(RELAYER_PK, provider);
 
-  // Usa la clave privada del deployer desde .env
-  const deployer = new hre.ethers.Wallet(process.env.RELAYER_PK, hre.ethers.provider);
-  console.log("Deploying with account:", deployer.address);
+  // Nonce único para el usuario
+  const userNonceArg = randomInt(1, 1000000);
 
-  // Muestra el balance
-  const balance = await hre.ethers.provider.getBalance(deployer.address);
-  console.log("Account balance:", hre.ethers.formatEther(balance), "ETH");
+  // Bytecode del contrato Storage
+  const art = JSON.parse(fs.readFileSync(STORE_ARTIFACT, "utf8"));
+  const initCode = art.bytecode;
+  if (!initCode || initCode === "0x") throw new Error("INIT CODE vacío para Storage.");
 
-  // Obtiene el factory del contrato Storage
-  const StorageFactory = await hre.ethers.getContractFactory("Storage", deployer);
+  // Armar el Forward para deploy
 
-  // Si el contrato tuviera argumentos, podrías leerlos de process.env.STORE_ARGS
-  // Pero en este caso no tiene constructor con argumentos
-  console.log("Deploying Storage...");
-  const storage = await StorageFactory.deploy();
+  const prep = await prepareForward({
+    provider,
+    metaAddress: HUB_ADDRESS,
+    hasCaller: HAS_CALLER === "true",
+    from: await signer.getAddress(),
+    to: ethers.ZeroAddress,
+    value: BigInt(VALUE_WEI),
+    space: Number(SPACE) >>> 0,
+    nonce: BigInt(userNonceArg),
+    deadlineSec: Number(DEADLINE_SEC),
+    callData: initCode,
+    caller: CALLER
+  });
 
-  await storage.waitForDeployment();
-  const contractAddress = await storage.getAddress();
+  // Firmar el Forward
+  const signature = await signForward(signer, prep.domain, prep.types, prep.message);
 
-  console.log("✅ Storage deployed successfully!");
-  console.log("📋 Contract address:", contractAddress);
-  console.log("🔗 Deployment tx hash:", storage.deploymentTransaction().hash);
+  // Ejecutar la meta-tx con el relayer
+  const tx = await executeForward({
+    provider,
+    metaAddress: HUB_ADDRESS,
+    fTuple: prep.fTuple,
+    callData: prep.callData,
+    signature,
+    relayer,
+    hasCaller: HAS_CALLER === "true",
+    overrides: { gasLimit: 5000000 }
+  });
 
-  // Info de red
-  const network = await hre.ethers.provider.getNetwork();
-  console.log("🌐 Network:", network.name, "(" + network.chainId + ")");
+  const rcpt = await tx.wait();
+  console.log("OK ➜ Tx hash:", rcpt.hash);
 
-  // Gas usado
-  const receipt = await storage.deploymentTransaction().wait();
-  console.log("⛽ Gas used:", receipt.gasUsed.toString());
-
-  // Guarda metadata de deploy
-  const deploymentInfo = {
-    contractName: "Storage",
-    address: contractAddress,
-    network: network.name,
-    chainId: network.chainId.toString(),
-    txHash: storage.deploymentTransaction().hash,
-    deployer: deployer.address,
-    timestamp: new Date().toISOString(),
-    gasUsed: receipt.gasUsed.toString(),
-  };
-
-  if (!fs.existsSync("./deployments")) {
-    fs.mkdirSync("./deployments");
+  // Extraer la dirección desplegada si el hub emite evento
+  try {
+    const metaAbi = (await import("./abis.js")).META_ABI;
+    const contract = new ethers.Contract(HUB_ADDRESS, metaAbi, provider);
+    for (const log of rcpt.logs) {
+      try {
+        const ev = contract.interface.parseLog(log);
+        if (ev?.name && (ev.name.includes("Deployed") || ev.name.includes("ContractDeployed"))) {
+          const addr = ev.args?.deployed ?? ev.args?.resultAddress ?? ev.args?.[0];
+          if (addr) {
+            console.log("Contrato Storage desplegado en:", addr);
+            break;
+          }
+        }
+      } catch {}
+    }
+  } catch {
+    console.log("error extrayendo dirección desplegada");
   }
-  fs.writeFileSync(
-    `./deployments/Storage-${network.name}.json`,
-    JSON.stringify(deploymentInfo, null, 2)
-  );
-  console.log("📁 Deployment info saved to:", `./deployments/Storage-${network.name}.json`);
-  console.log("\n🎉 Deployment completed successfully!");
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error("❌ Deployment failed:");
-    console.error(error);
-    process.exit(1);
-  });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
