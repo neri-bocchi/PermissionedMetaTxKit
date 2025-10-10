@@ -119,7 +119,15 @@ describe("PermissionedMetaTxHub", function () {
         hub.connect(relayer).execute(forward, callData, signature)
       )
         .to.emit(hub, "Executed")
-        .withArgs(user.address, await storage.getAddress(), 0, 1, dataHash);
+        .withArgs(
+          user.address, 
+          await storage.getAddress(), 
+          0, 
+          1, 
+          dataHash,
+          relayer.address,  // nuevo: caller
+          0n                // nuevo: value
+        );
 
       expect(await storage.retrieve()).to.equal(42);
     });
@@ -148,7 +156,7 @@ describe("PermissionedMetaTxHub", function () {
 
       await expect(
         hub.connect(unauthorized).execute(forward, callData, signature)
-      ).to.be.revertedWith("caller not allowed");
+      ).to.be.revertedWithCustomError(hub, "CallerNotAllowed");
     });
 
     it("Should reject expired deadline", async function () {
@@ -175,7 +183,7 @@ describe("PermissionedMetaTxHub", function () {
 
       await expect(
         hub.connect(relayer).execute(forward, callData, signature)
-      ).to.be.revertedWith("expired");
+      ).to.be.revertedWithCustomError(hub, "DeadlineExpired");
     });
 
     it("Should reject wrong signature", async function () {
@@ -203,7 +211,7 @@ describe("PermissionedMetaTxHub", function () {
 
       await expect(
         hub.connect(relayer).execute(forward, callData, signature)
-      ).to.be.revertedWith("bad sig");
+      ).to.be.revertedWithCustomError(hub, "InvalidSignature");
     });
 
     it("Should reject data mismatch", async function () {
@@ -231,7 +239,7 @@ describe("PermissionedMetaTxHub", function () {
 
       await expect(
         hub.connect(relayer).execute(forward, wrongCallData, signature)
-      ).to.be.revertedWith("data mismatch");
+      ).to.be.revertedWithCustomError(hub, "DataMismatch");
     });
 
     it("Should reject replay attack (same nonce)", async function () {
@@ -262,7 +270,7 @@ describe("PermissionedMetaTxHub", function () {
       // Try to replay - should fail with "digest used" (el contrato verifica digest primero)
       await expect(
         hub.connect(relayer).execute(forward, callData, signature)
-      ).to.be.revertedWith("digest used");
+      ).to.be.revertedWithCustomError(hub, "DigestUsed");
     });
 
     it("Should allow out-of-order nonces", async function () {
@@ -408,7 +416,7 @@ describe("PermissionedMetaTxHub", function () {
 
       await expect(
         hub.connect(relayer).execute(forward, callData, signature)
-      ).to.be.revertedWith("nonce used");
+      ).to.be.revertedWithCustomError(hub, "NonceUsed");
     });
   });
 
