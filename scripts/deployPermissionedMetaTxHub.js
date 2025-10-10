@@ -1,86 +1,45 @@
+// scripts/deployPermissionedMetaTxHub.js
 import hre from "hardhat";
-const { ethers } = hre;
 import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 async function main() {
+  const FQN = process.env.FQN || "contracts/PermissionedMetaTxHub.sol:PermissionedMetaTxHub";
+  const [deployer] = await hre.ethers.getSigners();
+
   console.log("Starting PermissionedMetaTxHub deployment...");
-
-  // Deployer (EOA) that will own the contract
-  const [deployer] = await ethers.getSigners();
   console.log("Deploying with account:", deployer.address);
+  console.log("Account balance:", (await hre.ethers.provider.getBalance(deployer.address)).toString());
 
-  // Show current balance for visibility
-  const balance = await ethers.provider.getBalance(deployer.address);
-  console.log("Account balance:", ethers.formatEther(balance), "ETH");
+  // Usa FQN explícito
+  const HubFactory = await hre.ethers.getContractFactory(FQN);
+  const artifact = await hre.artifacts.readArtifact(FQN);
 
-  // Load the contract factory (must match the Solidity contract name)
-  const HubFactory = await ethers.getContractFactory("PermissionedMetaTxHub");
+  // Loguea hash de runtime que VAS a desplegar (sin metadata)
+  const runtime = artifact.deployedBytecode; // ya es runtime
+  console.log("local runtime size:", runtime.length / 2 - 1, "bytes");
+  console.log("local runtime keccak:", hre.ethers.keccak256(runtime));
 
-  console.log("Deploying PermissionedMetaTxHub...");
-
-  // Deploy the contract (no constructor arguments required)
   const hub = await HubFactory.deploy();
-
-  // Wait until the deployment is mined and address is assigned
+  const tx = hub.deploymentTransaction();
   await hub.waitForDeployment();
 
-  const contractAddress = await hub.getAddress();
+  const addr = await hub.getAddress();
+  const receipt = await hre.ethers.provider.getTransactionReceipt(tx.hash);
 
   console.log("✅ PermissionedMetaTxHub deployed successfully!");
-  console.log("📋 Contract address:", contractAddress);
-  console.log("🔗 Deployment tx hash:", hub.deploymentTransaction().hash);
-
-  // Network info for logs and verification hint
-  const network = await ethers.provider.getNetwork();
-  console.log("🌐 Network:", network.name, "(" + network.chainId + ")");
-
-  // Gas used on deployment (from receipt)
-  const receipt = await hub.deploymentTransaction().wait();
+  console.log("📋 Contract address:", addr);
+  console.log("🔗 Deployment tx hash:", tx.hash);
+  console.log("🌐 Network:", hre.network.name);
   console.log("⛽ Gas used:", receipt.gasUsed.toString());
 
-  // Optionally print a verification command and persist metadata
-  if (network.chainId !== 31337n) {
-    console.log("\n📝 To verify the contract on the block explorer, run:");
-    console.log(`npx hardhat verify --network ${network.name} ${contractAddress}`);
+  // Guarda info mínima
+  fs.mkdirSync("./deployments", { recursive: true });
+  fs.writeFileSync(
+    "./deployments/PermissionedMetaTxHub-amoy.json",
+    JSON.stringify({ address: addr, txHash: tx.hash, network: hre.network.name }, null, 2)
+  );
 
-    // Persist minimal deployment metadata for future tooling
-    const deploymentInfo = {
-      contractName: "PermissionedMetaTxHub",
-      address: contractAddress,
-      network: network.name,
-      chainId: network.chainId.toString(),
-      txHash: hub.deploymentTransaction().hash,
-      deployer: deployer.address,
-      timestamp: new Date().toISOString(),
-      gasUsed: receipt.gasUsed.toString(),
-    };
-
-    const deploymentsDir = path.join(__dirname, "../deployments");
-    if (!fs.existsSync(deploymentsDir)) {
-      fs.mkdirSync(deploymentsDir, { recursive: true });
-    }
-
-    const deploymentFile = path.join(
-      deploymentsDir,
-      `PermissionedMetaTxHub-${network.name}.json`
-    );
-    fs.writeFileSync(deploymentFile, JSON.stringify(deploymentInfo, null, 2));
-    console.log("📁 Deployment info saved to:", deploymentFile);
-  }
-
-  console.log("\n🎉 Deployment completed successfully!");
+  console.log("🎉 Deployment completed successfully!");
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error("❌ Deployment failed:");
-    console.error(error);
-    process.exit(1);
-  });
+main().catch((e) => { console.error(e); process.exit(1); });

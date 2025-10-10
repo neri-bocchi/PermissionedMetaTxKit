@@ -1,22 +1,20 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.24;
 
 import {ECDSA}    from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {EIP712}   from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
-import {Address}  from "@openzeppelin/contracts/utils/Address.sol";
 import {Ownable}  from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title PermissionedMetaTxHub
 /// @author Luis Ranieri Bocchi
-/// @notice On-chain coordination hub for EIP-712 meta-transactions with support for:
-///         - Signed caller authorization
-///         - Out-of-order nonces (bitmap-based)
-///         - Signature cancellation
-///         - Authorized relayer allowlist
-///         - ERC-1271 contract signature validation
-///         - Contract creation via meta-call
-///         - Per-block gas quota enforcement
+/// @notice Hub on-chain para meta-txs EIP-712 con:
+///         - Autorización del caller (allowlist)
+///         - Nonces fuera de orden (bitmap)
+///         - Cancelación por firma
+///         - Validación ERC-1271
+///         - Deploy por meta-llamada (CREATE)
+///         - Cuota de gas por bloque por caller
 contract PermissionedMetaTxHub is EIP712, Ownable {
     using ECDSA for bytes32;
 
@@ -31,22 +29,21 @@ contract PermissionedMetaTxHub is EIP712, Ownable {
     );
 
     // ========= Nonces (bitmap) =========
-    // Each 256-bit word tracks 256 nonces for a given (user, space)
     mapping(address => mapping(uint32 => mapping(uint256 => uint256))) private noncesUsed;
 
-    // Digest-based replay protection (scoped by EIP-712 domain: chainId + contract)
+    // ========= Replay por digest =========
     mapping(bytes32 => bool) public usedDigest;
 
-    // ========= Caller allowlist (who can execute meta-txs) =========
+    // ========= Allowlist de callers =========
     mapping(address => bool) public isCallerAllowed;
 
-    // ========= Per-block gas quota (per caller) =========
-    mapping(address => uint256) public gasLimitPerBlock;   // 0 = unlimited
-    mapping(address => uint256) private _gasUsedThisBlock; // gas used in current block
+    // ========= Cuota de gas por bloque =========
+    mapping(address => uint256) public gasLimitPerBlock;   // 0 = sin límite
+    mapping(address => uint256) private _gasUsedThisBlock; // gas usado en el bloque actual
     mapping(address => uint64)  private _lastBlockForCaller;
-    uint256 public gasAccountingOverhead = 15_000;         // overhead margin (adjustable)
+    uint256 public gasAccountingOverhead = 15_000;         // margen configurable
 
-    // ========= Events =========
+    // ========= Eventos =========
     event Executed(address indexed from, address indexed to, uint32 indexed space, uint256 nonce, bytes32 dataHash);
     event Canceled(address indexed from, uint32 indexed space, uint256 nonce);
     event ContractDeployed(address indexed signer, address deployed, bytes32 dataHash);
@@ -56,46 +53,35 @@ contract PermissionedMetaTxHub is EIP712, Ownable {
 
     // ========= Structs =========
     struct Forward {
-        address from;      // signer authorizing the meta-tx
-        address to;        // target contract (or address(0) for CREATE)
-        uint256 value;     // ETH value to forward
-        uint32  space;     // logical channel (0,1,2...) to parallelize nonces
-        uint256 nonce;     // arbitrary nonce (non-sequential)
-        uint256 deadline;  // expiration timestamp
-        bytes32 dataHash;  // keccak256(data) of the call or creation bytecode
-        address caller;    // on-chain executor (must match msg.sender)
+        address from;
+        address to;        // address(0) => CREATE
+        uint256 value;
+        uint32  space;
+        uint256 nonce;
+        uint256 deadline;
+        bytes32 dataHash;  // keccak256(data)
+        address caller;    // debe ser msg.sender
     }
 
-    // ========= Constructor =========
-    constructor()
-        EIP712("PermissionedMetaTxHub", "1")
-        Ownable(msg.sender)
-    {}
+    constructor() EIP712("PermissionedMetaTxHub", "1") Ownable(msg.sender) {}
 
-    // ========= Admin functions =========
-
-    /// @notice Add or remove an authorized relayer.
+    // ========= Admin =========
     function setCallerAllowed(address caller, bool allowed) external onlyOwner {
         isCallerAllowed[caller] = allowed;
         emit CallerAllowedSet(caller, allowed);
     }
 
-    /// @notice Set per-block gas quota for a specific relayer.
-    /// @dev 0 = unlimited usage.
     function setGasLimitPerBlock(address caller, uint256 limit) external onlyOwner {
         gasLimitPerBlock[caller] = limit;
         emit GasLimitSet(caller, limit);
     }
 
-    /// @notice Set the gas accounting overhead used when enforcing quotas.
     function setGasAccountingOverhead(uint256 overhead) external onlyOwner {
         gasAccountingOverhead = overhead;
         emit GasOverheadSet(overhead);
     }
 
-    // ========= View helpers =========
-
-    /// @notice Returns the gas used by a relayer in the current block and its quota.
+    // ========= Views =========
     function gasUsedThisBlock(address caller)
         external
         view
@@ -106,18 +92,12 @@ contract PermissionedMetaTxHub is EIP712, Ownable {
         blockNo = _lastBlockForCaller[caller];
     }
 
-    /// @notice Checks if a nonce has already been used.
     function isNonceUsed(address user, uint32 space, uint256 nonce) external view returns (bool) {
         (uint256 word, uint256 mask) = _wordAndMask(nonce);
         return (noncesUsed[user][space][word] & mask) != 0;
     }
 
-    // ========= Execution logic =========
-
-    /// @notice Executes an arbitrary call or contract deployment via a signed meta-transaction.
-    /// @param f The Forward struct (EIP-712 signed)
-    /// @param data The calldata for the target or bytecode for CREATE
-    /// @param signature The EIP-712 signature from `f.from`
+    // ========= Ejecución =========
     function execute(
         Forward calldata f,
         bytes calldata data,
@@ -125,15 +105,15 @@ contract PermissionedMetaTxHub is EIP712, Ownable {
     ) external payable {
         uint256 gasStart = gasleft();
 
-        // 1) Caller policy
+        // 1) Política de caller
         require(isCallerAllowed[msg.sender], "caller not allowed");
         require(f.caller == msg.sender, "unexpected caller");
 
-        // 2) Basic validation
+        // 2) Validaciones básicas
         require(block.timestamp <= f.deadline, "expired");
         require(keccak256(data) == f.dataHash, "data mismatch");
 
-        // 3) EIP-712 digest + signature verification (EOA or ERC-1271)
+        // 3) EIP-712: digest + firma (EOA o 1271)
         bytes32 digest = _hashTypedDataV4(
             keccak256(
                 abi.encode(
@@ -144,19 +124,21 @@ contract PermissionedMetaTxHub is EIP712, Ownable {
         );
         _validateSignature(f.from, digest, signature);
 
-        // 4) Replay protection
+        // 4) Anti-replay
         require(!usedDigest[digest], "digest used");
         _consumeNonce(f.from, f.space, f.nonce);
         usedDigest[digest] = true;
 
-        // 5) Validate ETH value consistency
+        // 5) Consistencia del ETH
         require(msg.value == f.value, "bad msg.value");
 
-        // 6) Execute target call or deploy contract
+        // 6) Ejecutar: CREATE o call
         if (f.to == address(0)) {
+            // ⚠️ IMPORTANTE: copiar calldata -> memory antes de CREATE
+            bytes memory creation = data;
             address deployed;
             assembly {
-                deployed := create(callvalue(), add(data.offset, 0x20), data.length)
+                deployed := create(callvalue(), add(creation, 0x20), mload(creation))
             }
             require(deployed != address(0), "METATXHUB: create failed");
             emit ContractDeployed(f.from, deployed, f.dataHash);
@@ -165,18 +147,12 @@ contract PermissionedMetaTxHub is EIP712, Ownable {
             require(ok, _revertMsg(ret));
         }
 
-        // 7) Enforce and update per-block gas quota for the caller
+        // 7) Cuota de gas por bloque
         _enforceAndConsumeCallerGas(gasStart, msg.sender);
 
         emit Executed(f.from, f.to, f.space, f.nonce, f.dataHash);
     }
 
-    /// @notice Cancels a pending meta-transaction by consuming its nonce.
-    /// @param from Signer authorizing the cancellation
-    /// @param space Logical space (same used in Forward)
-    /// @param nonce Nonce to cancel
-    /// @param deadline Expiration time
-    /// @param signature EIP-712 signature from the user
     function cancelWithSig(
         address from,
         uint32 space,
@@ -196,23 +172,18 @@ contract PermissionedMetaTxHub is EIP712, Ownable {
         emit Canceled(from, space, nonce);
     }
 
-    // ========= Internal helpers =========
-
-    /// @dev Verifies either EOA or ERC-1271 signature validity.
+    // ========= Internals =========
     function _validateSignature(address signerOrWallet, bytes32 digest, bytes calldata signature) internal view {
         if (signerOrWallet.code.length > 0) {
-            // ERC-1271 wallet
             bytes4 MAGICVALUE = IERC1271.isValidSignature.selector;
             bytes4 ret = IERC1271(signerOrWallet).isValidSignature(digest, signature);
             require(ret == MAGICVALUE, "1271 invalid");
         } else {
-            // EOA
             address signer = ECDSA.recover(digest, signature);
             require(signer == signerOrWallet, "bad sig");
         }
     }
 
-    /// @dev Marks a nonce as used within its 256-bit bitmap word.
     function _consumeNonce(address user, uint32 space, uint256 nonce) internal {
         (uint256 word, uint256 mask) = _wordAndMask(nonce);
         uint256 bitmap = noncesUsed[user][space][word];
@@ -220,21 +191,18 @@ contract PermissionedMetaTxHub is EIP712, Ownable {
         noncesUsed[user][space][word] = bitmap | mask;
     }
 
-    /// @dev Computes bitmap position for a given nonce.
     function _wordAndMask(uint256 nonce) internal pure returns (uint256 word, uint256 mask) {
         unchecked {
-            word = nonce >> 8;               // nonce / 256
-            uint256 bit = nonce & 0xff;      // nonce % 256
+            word = nonce >> 8;          // nonce / 256
+            uint256 bit = nonce & 0xff; // nonce % 256
             mask = (uint256(1) << bit);
         }
     }
 
-    /// @dev Enforces per-block gas usage limits for a given caller.
     function _enforceAndConsumeCallerGas(uint256 gasStart, address caller) internal {
         uint256 spent = gasStart - gasleft();
         unchecked { spent += gasAccountingOverhead; }
 
-        // Reset counter if a new block started
         if (_lastBlockForCaller[caller] != uint64(block.number)) {
             _lastBlockForCaller[caller] = uint64(block.number);
             _gasUsedThisBlock[caller] = 0;
@@ -248,7 +216,6 @@ contract PermissionedMetaTxHub is EIP712, Ownable {
         _gasUsedThisBlock[caller] = newTotal;
     }
 
-    /// @dev Decodes revert reasons from failed calls.
     function _revertMsg(bytes memory ret) private pure returns (string memory) {
         if (ret.length < 68) return "call failed";
         assembly { ret := add(ret, 0x04) }

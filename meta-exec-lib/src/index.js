@@ -18,13 +18,16 @@ export function buildCallData(targetAbi, fnName, args) {
 export async function prepareForward({
   provider,
   metaAddress,
+  domainName = "PermissionedMetaTxHub",  // ← NUEVO: configurable
+  domainVersion = "1",           // ← NUEVO: configurable
   hasCaller = true,
   from,
   to,
   value = 0n,
   space = 0,
   nonce,              // obligatorio, gestionado por el usuario
-  deadlineSec = 10 * 60,
+  deadline,           // deadline absoluto (timestamp) - NUEVO
+  deadlineSec,        // o segundos desde ahora
   callData,
   caller              // requerido si hasCaller = true
 }) {
@@ -36,9 +39,18 @@ export async function prepareForward({
   const metaAddr = ethers.getAddress(metaAddress);
 
   const dataHash = ethers.keccak256(callData);
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + Number(deadlineSec));
+  
+  // Calcular deadline: usar el parámetro si existe, sino calcular desde deadlineSec
+  const finalDeadline = deadline !== undefined 
+    ? BigInt(deadline) 
+    : BigInt(Math.floor(Date.now() / 1000) + Number(deadlineSec || 600));
 
-  const domain = { name: "MetaExecutor", version: "1", chainId, verifyingContract: metaAddr };
+  const domain = { 
+    name: domainName,           // ← USA EL PARÁMETRO
+    version: domainVersion,     // ← USA EL PARÁMETRO
+    chainId, 
+    verifyingContract: metaAddr 
+  };
 
   const types = {
     Forward: hasCaller
@@ -64,12 +76,12 @@ export async function prepareForward({
   };
 
   const message = hasCaller
-    ? { from, to, value, space, nonce: BigInt(nonce), deadline, dataHash, caller }
-    : { from, to, value, space, nonce: BigInt(nonce), deadline, dataHash };
+    ? { from, to, value, space, nonce: BigInt(nonce), deadline: finalDeadline, dataHash, caller }
+    : { from, to, value, space, nonce: BigInt(nonce), deadline: finalDeadline, dataHash };
 
   const fTuple = hasCaller
-    ? [from, to, value, space, BigInt(nonce), deadline, dataHash, caller]
-    : [from, to, value, space, BigInt(nonce), deadline, dataHash];
+    ? [from, to, value, space, BigInt(nonce), finalDeadline, dataHash, caller]
+    : [from, to, value, space, BigInt(nonce), finalDeadline, dataHash];
 
   return {
     domain,
@@ -91,9 +103,6 @@ export function signForward(userWallet, domain, types, message) {
 /**
  * Ejecuta la metatx con el relayer.
  */
-
-
-
 export async function executeForward({
   provider,
   metaAddress,
@@ -106,8 +115,6 @@ export async function executeForward({
   checkAllowlist = true
 }) {
 
-console.log("callData length:", callData.length);
-console.log("callData (hex):", callData);
 
   const metaAddr   = ethers.getAddress(metaAddress);
   const executeSig = EXECUTE_SIG;
@@ -136,7 +143,7 @@ console.log("callData (hex):", callData);
     data: execData,
     value: overrides.value ?? 0n,
     gasLimit,
-    nonce: overrides.nonce, // ahora es responsabilidad del usuario
+    nonce: overrides.nonce,
     gasPrice: overrides.gasPrice,
     maxFeePerGas: overrides.maxFeePerGas,
     maxPriorityFeePerGas: overrides.maxPriorityFeePerGas

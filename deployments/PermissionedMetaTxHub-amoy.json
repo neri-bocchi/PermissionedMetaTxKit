@@ -1,10 +1,5 @@
 {
-  "contractName": "PermissionedMetaTxHub",
-  "address": "0xC42E4866b400D961b2adE198d0f84512648453BC",
-  "network": "amoy",
-  "chainId": "80002",
-  "txHash": "0x0dfaf07918f0c50ab23aba1e285644af789057ad6fe5f2a7fd66d351dc4d3770",
-  "deployer": "0xA7293f15A7c1cF346aafD603a8D0E1Bc681d7b45",
-  "timestamp": "2025-10-09T18:29:59.553Z",
-  "gasUsed": "2818353"
+  "address": "0x8a65c1dA1cc41604DeBf001D6B944dAa8e2c4EF1",
+  "txHash": "0x8ea1124cd321efa55ffbbfd61327a24e17eeb2bb9afe463df7a3dc2c9c5c7f6d",
+  "network": "amoy"
 }
