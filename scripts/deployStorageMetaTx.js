@@ -1,7 +1,12 @@
-// deployStorageViaHub.js
 import hre from "hardhat";
 import "dotenv/config";
-import { prepareForward, signForward, executeForward } from "../meta-exec-lib/src/index.js";
+import { 
+  prepareForward, 
+  signForward, 
+  executeForward,
+  getDeployedAddress 
+} from "../meta-exec-lib/src/index.js";
+import { META_ABI } from "../meta-exec-lib/src/abis.js";
 
 const { ethers } = hre;
 
@@ -21,13 +26,11 @@ async function main() {
   console.log("Sender (signer):", sender.address);
   console.log("Hub:", HUB_ADDRESS, "\n");
 
-  // 2️⃣ Obtener bytecode de Storage (esto es el "callData" para CREATE)
+  // 2️⃣ Obtener bytecode de Storage
   const StorageFactory = await ethers.getContractFactory("Storage");
   const deployBytecode = StorageFactory.bytecode;
 
-  console.log("Storage bytecode length:", deployBytecode.length / 2 - 1, "bytes\n");
-
-  // 3️⃣ Preparar Forward para CREATE (to = address(0))
+  // 3️⃣ Preparar Forward para CREATE
   const space = 0;
   const nonce = Math.floor(Math.random() * 1000000);
   
@@ -36,16 +39,16 @@ async function main() {
     metaAddress: HUB_ADDRESS,
     hasCaller: true,
     from: sender.address,
-    to: ethers.ZeroAddress, // ← CREATE deployment
+    to: ethers.ZeroAddress,
     value: 0n,
     space,
     nonce,
-    deadlineSec: 3600, // 1 hora
-    callData: deployBytecode, // bytecode del contrato
+    deadlineSec: 3600,
+    callData: deployBytecode,
     caller: relayer.address
   });
 
-  console.log("📝 Forward prepared:");
+  console.log("📋 Forward prepared:");
   console.log("  - from:", message.from);
   console.log("  - to:", message.to, "(CREATE)");
   console.log("  - space:", message.space);
@@ -78,31 +81,14 @@ async function main() {
   const receipt = await tx.wait();
   console.log("✅ Tx mined in block:", receipt.blockNumber, "\n");
 
-  // 6️⃣ Encontrar dirección del contrato deployado
-  const hub = await ethers.getContractAt("PermissionedMetaTxHub", HUB_ADDRESS);
-  
-  const deployEvent = receipt.logs
-    .map((log) => {
-      try {
-        return hub.interface.parseLog(log);
-      } catch {
-        return null;
-      }
-    })
-    .find((e) => e && e.name === "ContractDeployed");
+  // 6️⃣ Obtener dirección del contrato deployado
+  const deployedAddress = getDeployedAddress(receipt, META_ABI);
 
-  if (deployEvent) {
-    const deployedAddress = deployEvent.args.deployed;
+  if (deployedAddress) {
     console.log("🎉 Storage deployed at:", deployedAddress);
-
-    // 7️⃣ Verificar que funciona
-    const storage = await ethers.getContractAt("Storage", deployedAddress);
-    const owner = await storage.owner();
-    console.log("Storage owner:", owner);
-    console.log("Owner matches sender?", owner.toLowerCase() === sender.address.toLowerCase());
-  } else {
-    console.log("⚠️  ContractDeployed event not found");
-  }
+   } else {
+    console.log("⚠️  Could not find deployed address in the receipt.");
+  } 
 }
 
 main()

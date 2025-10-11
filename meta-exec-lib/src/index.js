@@ -18,18 +18,18 @@ export function buildCallData(targetAbi, fnName, args) {
 export async function prepareForward({
   provider,
   metaAddress,
-  domainName = "PermissionedMetaTxHub",  // ← NUEVO: configurable
-  domainVersion = "1",           // ← NUEVO: configurable
+  domainName = "PermissionedMetaTxHub",
+  domainVersion = "1",
   hasCaller = true,
   from,
   to,
   value = 0n,
   space = 0,
-  nonce,              // obligatorio, gestionado por el usuario
-  deadline,           // deadline absoluto (timestamp) - NUEVO
-  deadlineSec,        // o segundos desde ahora
+  nonce,
+  deadline,
+  deadlineSec,
   callData,
-  caller              // requerido si hasCaller = true
+  caller
 }) {
   if (nonce === undefined || nonce === null)
     throw new Error("El parámetro nonce es obligatorio (lo gestiona el usuario).");
@@ -40,14 +40,13 @@ export async function prepareForward({
 
   const dataHash = ethers.keccak256(callData);
   
-  // Calcular deadline: usar el parámetro si existe, sino calcular desde deadlineSec
   const finalDeadline = deadline !== undefined 
     ? BigInt(deadline) 
     : BigInt(Math.floor(Date.now() / 1000) + Number(deadlineSec || 600));
 
   const domain = { 
-    name: domainName,           // ← USA EL PARÁMETRO
-    version: domainVersion,     // ← USA EL PARÁMETRO
+    name: domainName,
+    version: domainVersion,
     chainId, 
     verifyingContract: metaAddr 
   };
@@ -115,6 +114,8 @@ export async function executeForward({
   checkAllowlist = true
 }) {
 
+console.log("callData length:", callData.length);
+console.log("callData (hex):", callData);
 
   const metaAddr   = ethers.getAddress(metaAddress);
   const executeSig = EXECUTE_SIG;
@@ -150,4 +151,26 @@ export async function executeForward({
   });
 
   return tx;
+}
+
+/**
+ * Extrae la dirección del contrato deployado desde el receipt de una meta-tx CREATE.
+ * @param {Object} receipt - Transaction receipt
+ * @param {Array} hubAbi - ABI del hub (debe incluir el evento ContractDeployed)
+ * @returns {string|null} Dirección del contrato deployado o null si no se encontró
+ */
+export function getDeployedAddress(receipt, hubAbi) {
+  const hubInterface = new ethers.Interface(hubAbi);
+  
+  const deployEvent = receipt.logs
+    .map((log) => {
+      try {
+        return hubInterface.parseLog(log);
+      } catch {
+        return null;
+      }
+    })
+    .find((e) => e && e.name === "ContractDeployed");
+
+  return deployEvent ? deployEvent.args.deployed : null;
 }
