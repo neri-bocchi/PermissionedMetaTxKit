@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PermissionedMetaTxKit - Advanced EIP-712 Meta-Transactions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            overflow-x: hidden;
+        }
+
+        .gradient-bg {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: -1;
+            background: radial-gradient(circle at 20% 50%, rgba(120, 0, 255, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(0, 200, 255, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 40% 20%, rgba(255, 0, 150, 0.05) 0%, transparent 50%);
+            animation: gradientShift 15s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        header {
+            padding: 30px 0;
+            position: relative;
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 40px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: #b0b0b0;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-links a:hover {
+            color: #667eea;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 100px 0 80px;
+            position: relative;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 50px;
+            font-size: 13px;
+            color: #667eea;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+            animation: fadeInUp 0.8s ease;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            font-size: 72px;
+            font-weight: 900;
+            line-height: 1.1;
+            margin-bottom: 25px;
+            background: linear-gradient(135deg, #ffffff 0%, #667eea 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: fadeInUp 0.8s ease 0.2s backwards;
+        }
+
+        .hero-subtitle {
+            font-size: 22px;
+            color: #a0a0a0;
+            max-width: 700px;
+            margin: 0 auto 50px;
+            line-height: 1.6;
+            animation: fadeInUp 0.8s ease 0.4s backwards;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            animation: fadeInUp 0.8s ease 0.6s backwards;
+        }
+
+        .btn {
+            padding: 16px 40px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 50px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .features {
+            padding: 80px 0;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 80px;
+        }
+
+        .section-title {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #ffffff 0%, #a0a0a0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .section-subtitle {
+            font-size: 18px;
+            color: #808080;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 30px;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 40px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(102, 126, 234, 0.3);
+            box-shadow: 0 20px 60px rgba(102, 126, 234, 0.1);
+        }
+
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-bottom: 25px;
+        }
+
+        .feature-card h3 {
+            font-size: 22px;
+            margin-bottom: 15px;
+            color: #ffffff;
+        }
+
+        .feature-card p {
+            color: #909090;
+            line-height: 1.7;
+            font-size: 15px;
+        }
+
+        .code-section {
+            padding: 80px 0;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .code-container {
+            background: rgba(10, 10, 15, 0.8);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            border-radius: 20px;
+            padding: 40px;
+            backdrop-filter: blur(20px);
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .code-title {
+            font-size: 18px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .code-tabs {
+            display: flex;
+            gap: 10px;
+        }
+
+        .code-tab {
+            padding: 8px 16px;
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            border-radius: 8px;
+            color: #667eea;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        pre {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 12px;
+            padding: 30px;
+            overflow-x: auto;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        code {
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .highlight-line {
+            color: #667eea;
+        }
+
+        .stats {
+            padding: 80px 0;
+            text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 40px;
+            margin-top: 60px;
+        }
+
+        .stat-item {
+            padding: 30px;
+        }
+
+        .stat-number {
+            font-size: 48px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            color: #808080;
+            font-size: 16px;
+        }
+
+        .architecture {
+            padding: 80px 0;
+        }
+
+        .arch-diagram {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 60px;
+            margin-top: 60px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .arch-flow {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            gap: 40px;
+        }
+
+        .arch-step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .arch-box {
+            background: rgba(102, 126, 234, 0.1);
+            border: 2px solid rgba(102, 126, 234, 0.3);
+            border-radius: 16px;
+            padding: 30px 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .arch-box:hover {
+            background: rgba(102, 126, 234, 0.2);
+            transform: scale(1.05);
+        }
+
+        .arch-number {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            color: white;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+        }
+
+        .arch-label {
+            font-size: 18px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 8px;
+        }
+
+        .arch-desc {
+            font-size: 13px;
+            color: #808080;
+        }
+
+        .arrow {
+            position: relative;
+            color: rgba(102, 126, 234, 0.4);
+            font-size: 30px;
+        }
+
+        footer {
+            padding: 60px 0 40px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            margin-top: 80px;
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 30px;
+        }
+
+        .footer-links a {
+            color: #808080;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s ease;
+        }
+
+        .footer-links a:hover {
+            color: #667eea;
+        }
+
+        .author {
+            color: #808080;
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 42px;
+            }
+
+            .hero-subtitle {
+                font-size: 18px;
+            }
+
+            .cta-buttons {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .arch-flow {
+                flex-direction: column;
+            }
+
+            .arrow {
+                transform: rotate(90deg);
+            }
+
+            .footer-content {
+                flex-direction: column;
+                gap: 30px;
+                text-align: center;
+            }
+
+            .footer-links {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="gradient-bg"></div>
+
+    <header>
+        <div class="container">
+            <nav>
+                <div class="logo">⚡ MetaTxKit</div>
+                <ul class="nav-links">
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#docs">Documentation</a></li>
+                    <li><a href="#architecture">Architecture</a></li>
+                    <li><a href="https://github.com/neri-bocchi/PermissionedMetaTxKit">GitHub</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <div class="hero-badge">🚀 EIP-712 Meta-Transactions Made Easy</div>
+                <h1>PermissionedMetaTxKit</h1>
+                <p class="hero-subtitle">
+                    Advanced meta-transaction execution on Ethereum with permission control, flexible nonce management, and per-block gas quotas
+                </p>
+                <div class="cta-buttons">
+                    <a href="https://github.com/neri-bocchi/PermissionedMetaTxKit" class="btn btn-primary">
+                        <span>Get Started</span>
+                        <span>→</span>
+                    </a>
+                    <a href="#docs" class="btn btn-secondary">
+                        <span>Read Docs</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="features" id="features">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">Powerful Features</h2>
+                    <p class="section-subtitle">Everything you need for secure and efficient meta-transaction execution</p>
+                </div>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">🔐</div>
+                        <h3>Permission Control</h3>
+                        <p>Relayer allowlist ensures only authorized entities can execute meta-transactions, providing an additional security layer for your dApp</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🎯</div>
+                        <h3>Bitmap Nonces</h3>
+                        <p>Execute transactions out-of-order and in parallel with bitmap-based nonce management, enabling flexible workflow orchestration</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⛽</div>
+                        <h3>Gas Quotas</h3>
+                        <p>Per-block gas quotas prevent relayer abuse and ensure fair resource distribution across all users of the system</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">✍️</div>
+                        <h3>EIP-712 Signing</h3>
+                        <p>Industry-standard typed data signing for secure and user-friendly transaction approval with clear visibility</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔄</div>
+                        <h3>Replay Protection</h3>
+                        <p>Strong replay attack prevention through signature validation and nonce consumption, keeping your transactions secure</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📜</div>
+                        <h3>ERC-1271 Support</h3>
+                        <p>Smart contract signature validation enables contract wallets and multi-sig setups to interact seamlessly</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="code-section" id="docs">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">Simple Integration</h2>
+                    <p class="section-subtitle">Get up and running in minutes with our intuitive JavaScript library</p>
+                </div>
+                <div class="code-container">
+                    <div class="code-header">
+                        <div class="code-title">meta-exec-lib Example</div>
+                        <div class="code-tabs">
+                            <div class="code-tab">JavaScript</div>
+                        </div>
+                    </div>
+                    <pre><code>import { buildCallData, prepareForward, signForward, executeForward } from "meta-exec-lib";
+
+<span class="highlight-line">// 1. Build the calldata for your target contract</span>
+const callData = buildCallData(
+  ["function store(uint256)"], 
+  "store", 
+  [valueToStore]
+);
+
+<span class="highlight-line">// 2. Prepare the meta-transaction</span>
+const prep = await prepareForward({
+  provider,
+  metaAddress: HUB_ADDRESS,
+  from: user.address,
+  to: STORAGE_ADDRESS,
+  callData,
+  caller: relayer.address,
+  nonce: Math.floor(Math.random() * 1000000)
+});
+
+<span class="highlight-line">// 3. User signs the transaction</span>
+const signature = await signForward(user, prep.domain, prep.types, prep.message);
+
+<span class="highlight-line">// 4. Relayer executes on-chain</span>
+const tx = await executeForward({
+  provider,
+  metaAddress: HUB_ADDRESS,
+  fTuple: prep.fTuple,
+  signature,
+  relayer
+});
+
+console.log("✅ Transaction executed:", tx.hash);</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="stats">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">Built for Production</h2>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-number">EIP-712</div>
+                        <div class="stat-label">Standard Compliant</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">∞</div>
+                        <div class="stat-label">Parallel Transactions</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">100%</div>
+                        <div class="stat-label">Replay Protected</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">MIT</div>
+                        <div class="stat-label">Open Source License</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="architecture" id="architecture">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">How It Works</h2>
+                    <p class="section-subtitle">Simple, secure, and efficient meta-transaction flow</p>
+                </div>
+                <div class="arch-diagram">
+                    <div class="arch-flow">
+                        <div class="arch-step">
+                            <div class="arch-box">
+                                <div class="arch-number">1</div>
+                                <div class="arch-label">Sign</div>
+                                <div class="arch-desc">User signs meta-tx with their private key</div>
+                            </div>
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="arch-step">
+                            <div class="arch-box">
+                                <div class="arch-number">2</div>
+                                <div class="arch-label">Submit</div>
+                                <div class="arch-desc">Relayer receives signed transaction</div>
+                            </div>
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="arch-step">
+                            <div class="arch-box">
+                                <div class="arch-number">3</div>
+                                <div class="arch-label">Validate</div>
+                                <div class="arch-desc">Hub validates signature & permissions</div>
+                            </div>
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="arch-step">
+                            <div class="arch-box">
+                                <div class="arch-number">4</div>
+                                <div class="arch-label">Execute</div>
+                                <div class="arch-desc">Target contract call executed</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="author">
+                    Built with 💜 by <strong>Luis Ranieri Bocchi</strong>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/neri-bocchi/PermissionedMetaTxKit">GitHub</a>
+                    <a href="https://github.com/neri-bocchi/PermissionedMetaTxKit#readme">Documentation</a>
+                    <a href="https://github.com/neri-bocchi/PermissionedMetaTxKit/blob/main/LICENSE">MIT License</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Smooth scroll
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+
+        // Intersection Observer for fade-in animations
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.feature-card, .arch-step').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(30px)';
+            el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>
