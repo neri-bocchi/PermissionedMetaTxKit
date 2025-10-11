@@ -10,9 +10,9 @@ import { META_ABI } from "../meta-exec-lib/src/abis.js";
 
 const { ethers } = hre;
 
-const HUB_ADDRESS = process.env.HUB_ADDRESS;
-const RELAYER_PK = process.env.RELAYER_PK;
-const SENDER_PK = process.env.SENDER_PK;
+const HUB_ADDRESS = process.env.HUB_ADDRESS;   //PermissionedMetaTxHub contract address
+const RELAYER_PK = process.env.RELAYER_PK;     //Relayer private key (must be in the PermissionedMetaTxHub allowlist)
+const SENDER_PK = process.env.SENDER_PK;       //User private key (can be any EOA, not necessarily in the allowlist)
 
 async function main() {
   console.log("🚀 Deploying Storage via PermissionedMetaTxHub...\n");
@@ -48,13 +48,13 @@ async function main() {
     caller: relayer.address
   });
 
-  console.log("📋 Forward prepared:");
-  console.log("  - from:", message.from);
-  console.log("  - to:", message.to, "(CREATE)");
-  console.log("  - space:", message.space);
-  console.log("  - nonce:", message.nonce.toString());
-  console.log("  - caller:", message.caller);
-  console.log();
+  console.log("📋 Forward prepared");
+//  console.log("  - from:", message.from);              //uncomment to see full details
+//  console.log("  - to:", message.to, "(CREATE)");      //uncomment to see full details
+//  console.log("  - space:", message.space);            //uncomment to see full details
+//  console.log("  - nonce:", message.nonce.toString()); //uncomment to see full details
+//  console.log("  - caller:", message.caller);          //uncomment to see full details
+//  console.log();
 
   // 4️⃣ Firmar
   const signature = await signForward(sender, domain, types, message);
