@@ -7,8 +7,8 @@ import {IERC1271}        from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 import {Ownable}         from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-/// @title PermissionedMetaTxHub
-/// @author Luis Ranieri Bocchi
+/// @title PermissionedMetaTxHub (ERC-2771 compatible)
+/// @author Luis Ranieri Bocchi (adaptado para ERC-2771)
 /// @notice Hub on-chain para meta-txs EIP-712 con:
 ///         - Autorización del caller (allowlist)
 ///         - Nonces fuera de orden (bitmap)
@@ -18,8 +18,8 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 ///         - Cuota de gas por bloque por caller
 ///         - Protección contra reentrancy
 ///         - Protección contra gas griefing
-/// @dev SECURITY: Este contrato maneja meta-transacciones con múltiples capas de seguridad.
-///      El relayer autorizado tiene poder significativo - debe ser confiable.
+///         - **Compatibilidad ERC-2771**: apendea `from` al calldata en llamadas a `to`
+/// @dev SECURITY: El relayer autorizado tiene poder significativo - debe ser confiable.
 contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
     using ECDSA for bytes32;
 
@@ -28,41 +28,31 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
     uint256 private constant MAX_RETURN_DATA_SIZE = 1024;
 
     // ========= EIP-712 =========
-    /// @dev Typehash for Forward struct
     bytes32 private constant FORWARD_TYPEHASH = keccak256(
         "Forward(address from,address to,uint256 value,uint32 space,uint256 nonce,uint256 deadline,bytes32 dataHash,address caller)"
     );
-    
-    /// @dev Typehash for Cancel struct
     bytes32 private constant CANCEL_TYPEHASH = keccak256(
         "Cancel(address from,uint32 space,uint256 nonce,uint256 deadline)"
     );
 
     // ========= Nonces (bitmap) =========
-    /// @dev Bitmap tracking used nonces per user per space
-    /// user => space => word => bitmap
     mapping(address => mapping(uint32 => mapping(uint256 => uint256))) private noncesUsed;
 
     // ========= Replay por digest =========
-    /// @dev Tracks used digests to prevent replay attacks
     mapping(bytes32 => bool) public usedDigest;
 
     // ========= Allowlist de callers =========
-    /// @dev Whitelist of authorized relayers
     mapping(address => bool) public isCallerAllowed;
 
     // ========= Cuota de gas por bloque =========
-    /// @dev Gas limit per block per caller (0 = unlimited)
     mapping(address => uint256) public gasLimitPerBlock;
-    
-    /// @dev Gas used in current block by caller
     mapping(address => uint256) private _gasUsedThisBlock;
-    
-    /// @dev Last block number when caller was active
-    mapping(address => uint64) private _lastBlockForCaller;
-    
-    /// @dev Overhead for gas accounting (configurable)
+    mapping(address => uint64)  private _lastBlockForCaller;
     uint256 public gasAccountingOverhead = 15_000;
+
+    // ========= ERC-2771 toggle =========
+    /// @notice Si es true, al hacer CALL se apendea `f.from` (ERC-2771)
+    bool public erc2771AppendSender = true;
 
     // ========= Eventos =========
     event Executed(
@@ -79,6 +69,7 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
     event CallerAllowedSet(address indexed caller, bool allowed);
     event GasLimitSet(address indexed caller, uint256 limit);
     event GasOverheadSet(uint256 overhead);
+    event Erc2771AppendSenderSet(bool enabled);
 
     // ========= Errors =========
     error CallerNotAllowed();
@@ -102,46 +93,37 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
         uint32  space;     // Nonce space for organization
         uint256 nonce;     // Unique nonce (out-of-order allowed)
         uint256 deadline;  // Expiration timestamp
-        bytes32 dataHash;  // keccak256(data) for integrity
-        address caller;    // Must match msg.sender (authorized relayer)
+        bytes32 dataHash;  // keccak256(data) para integridad (pre-append)
+        address caller;    // Debe coincidir con msg.sender (relayer autorizado)
     }
 
     constructor() EIP712("PermissionedMetaTxHub", "1") Ownable(msg.sender) {}
 
     // ========= Admin =========
-    
-    /// @notice Authorize or revoke a relayer
-    /// @param caller Address of the relayer
-    /// @param allowed True to authorize, false to revoke
     function setCallerAllowed(address caller, bool allowed) external onlyOwner {
         if (caller == address(0)) revert ZeroAddress();
         isCallerAllowed[caller] = allowed;
         emit CallerAllowedSet(caller, allowed);
     }
 
-    /// @notice Set gas limit per block for a caller
-    /// @param caller Address of the relayer
-    /// @param limit Gas limit (0 = unlimited)
     function setGasLimitPerBlock(address caller, uint256 limit) external onlyOwner {
         if (caller == address(0)) revert ZeroAddress();
         gasLimitPerBlock[caller] = limit;
         emit GasLimitSet(caller, limit);
     }
 
-    /// @notice Set gas accounting overhead
-    /// @param overhead Overhead in gas units
     function setGasAccountingOverhead(uint256 overhead) external onlyOwner {
         gasAccountingOverhead = overhead;
         emit GasOverheadSet(overhead);
     }
 
+    /// @notice Activa/desactiva el apéndice ERC-2771 del sender al calldata
+    function setErc2771AppendSender(bool enabled) external onlyOwner {
+        erc2771AppendSender = enabled;
+        emit Erc2771AppendSenderSet(enabled);
+    }
+
     // ========= Views =========
-    
-    /// @notice Get gas usage statistics for a caller
-    /// @param caller Address of the relayer
-    /// @return used Gas used in current block
-    /// @return limit Gas limit per block
-    /// @return blockNo Last active block number
     function gasUsedThisBlock(address caller)
         external
         view
@@ -152,11 +134,6 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
         blockNo = _lastBlockForCaller[caller];
     }
 
-    /// @notice Check if a nonce has been used
-    /// @param user Address of the user
-    /// @param space Nonce space
-    /// @param nonce Nonce value
-    /// @return True if nonce is used
     function isNonceUsed(address user, uint32 space, uint256 nonce) 
         external 
         view 
@@ -167,12 +144,6 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
     }
 
     // ========= Ejecución =========
-    
-    /// @notice Execute a meta-transaction
-    /// @dev Protected against reentrancy via nonReentrant modifier
-    /// @param f Forward struct containing meta-tx parameters
-    /// @param data Calldata or bytecode (for CREATE)
-    /// @param signature EIP-712 signature from f.from
     function execute(
         Forward calldata f,
         bytes calldata data,
@@ -180,15 +151,15 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
     ) external payable nonReentrant {
         uint256 gasStart = gasleft();
 
-        // 1) Validate caller authorization
+        // 1) Autorización del caller
         if (!isCallerAllowed[msg.sender]) revert CallerNotAllowed();
         if (f.caller != msg.sender) revert UnexpectedCaller();
 
-        // 2) Basic validations
+        // 2) Validaciones básicas
         if (block.timestamp > f.deadline) revert DeadlineExpired();
         if (keccak256(data) != f.dataHash) revert DataMismatch();
 
-        // 3) EIP-712 signature verification (supports EOA and ERC-1271)
+        // 3) Verificación EIP-712 (EOA o ERC-1271)
         bytes32 digest = _hashTypedDataV4(
             keccak256(
                 abi.encode(
@@ -199,34 +170,28 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
         );
         _validateSignature(f.from, digest, signature);
 
-        // 4) Replay protection (double layer: digest + nonce)
+        // 4) Replay protection
         if (usedDigest[digest]) revert DigestUsed();
         _consumeNonce(f.from, f.space, f.nonce);
         usedDigest[digest] = true;
 
-        // 5) Validate ETH value
+        // 5) Validación ETH
         if (msg.value != f.value) revert BadMsgValue();
 
-        // 6) Execute: CREATE or CALL
+        // 6) Ejecutar
         if (f.to == address(0)) {
             _executeCreate(f, data);
         } else {
-            _executeCall(f, data);
+            _executeCall(f, data); // <-- ERC-2771 aquí
         }
 
-        // 7) Enforce gas quota per block
+        // 7) Enforce cuota de gas por bloque
         _enforceAndConsumeCallerGas(gasStart, msg.sender);
 
-        // 8) Emit execution event
+        // 8) Evento
         emit Executed(f.from, f.to, f.space, f.nonce, f.dataHash, f.caller, f.value);
     }
 
-    /// @notice Cancel a nonce with signature
-    /// @param from Address of the signer
-    /// @param space Nonce space
-    /// @param nonce Nonce to cancel
-    /// @param deadline Expiration timestamp
-    /// @param signature EIP-712 signature
     function cancelWithSig(
         address from,
         uint32 space,
@@ -247,24 +212,15 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
     }
 
     // ========= Internal Execution Helpers =========
-    
-    /// @dev Execute CREATE deployment
-    /// @param f Forward struct
-    /// @param data Bytecode to deploy
     function _executeCreate(Forward calldata f, bytes calldata data) internal {
         bytes memory creation = data;
         address deployed;
         
         assembly {
             deployed := create(callvalue(), add(creation, 0x20), mload(creation))
-            
-            // If CREATE failed, bubble up the revert reason
             if iszero(deployed) {
                 let size := returndatasize()
-                // Limit return data size to prevent gas griefing
-                if gt(size, MAX_RETURN_DATA_SIZE) {
-                    size := MAX_RETURN_DATA_SIZE
-                }
+                if gt(size, 1024) { size := 1024 }
                 let ptr := mload(0x40)
                 returndatacopy(ptr, 0, size)
                 revert(ptr, size)
@@ -274,35 +230,31 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
         emit ContractDeployed(f.from, deployed, f.dataHash);
     }
 
-    /// @dev Execute external call
-    /// @param f Forward struct
-    /// @param data Calldata for the target
+    /// @dev Llamada externa con compatibilidad ERC-2771:
+    ///      payload = data (+ opcionalmente 20 bytes de `f.from` al final)
     function _executeCall(Forward calldata f, bytes calldata data) internal {
         address target = f.to;
         uint256 value = f.value;
+
+        bytes memory payload;
+        if (erc2771AppendSender) {
+            // ERC-2771: apendear el "sender real"
+            payload = abi.encodePacked(data, f.from);
+        } else {
+            payload = data;
+        }
+
         bool success;
         bytes memory returnData;
-        
+
         assembly {
-            // Perform the call
-            let ptr := mload(0x40)
-            calldatacopy(ptr, data.offset, data.length)
-            success := call(
-                gas(),
-                target,
-                value,
-                ptr,
-                data.length,
-                0,
-                0
-            )
-            
-            // Copy return data (limited to prevent gas griefing)
+            let ptr := add(payload, 0x20)
+            let len := mload(payload)
+            success := call(gas(), target, value, ptr, len, 0, 0)
+
             let size := returndatasize()
-            if gt(size, MAX_RETURN_DATA_SIZE) {
-                size := MAX_RETURN_DATA_SIZE
-            }
-            
+            if gt(size, 1024) { size := 1024 }
+
             returnData := mload(0x40)
             mstore(returnData, size)
             returndatacopy(add(returnData, 0x20), 0, size)
@@ -313,18 +265,12 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
     }
 
     // ========= Internal Validation & Security =========
-    
-    /// @dev Validate EIP-712 signature (supports EOA and ERC-1271)
-    /// @param signerOrWallet Expected signer address
-    /// @param digest EIP-712 digest
-    /// @param signature Signature bytes
     function _validateSignature(
         address signerOrWallet,
         bytes32 digest,
         bytes calldata signature
     ) internal view {
         if (signerOrWallet.code.length > 0) {
-            // Smart contract wallet - use ERC-1271
             bytes4 magicValue = IERC1271.isValidSignature.selector;
             try IERC1271(signerOrWallet).isValidSignature(digest, signature) returns (bytes4 result) {
                 if (result != magicValue) revert InvalidSignature();
@@ -332,16 +278,11 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
                 revert InvalidSignature();
             }
         } else {
-            // EOA - use ECDSA
             address recovered = ECDSA.recover(digest, signature);
             if (recovered != signerOrWallet) revert InvalidSignature();
         }
     }
 
-    /// @dev Consume a nonce from the bitmap
-    /// @param user Address of the user
-    /// @param space Nonce space
-    /// @param nonce Nonce value
     function _consumeNonce(address user, uint32 space, uint256 nonce) internal {
         (uint256 word, uint256 mask) = _wordAndMask(nonce);
         uint256 bitmap = noncesUsed[user][space][word];
@@ -349,10 +290,6 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
         noncesUsed[user][space][word] = bitmap | mask;
     }
 
-    /// @dev Convert nonce to word and bit mask
-    /// @param nonce Nonce value
-    /// @return word Word index in bitmap
-    /// @return mask Bit mask for the nonce
     function _wordAndMask(uint256 nonce) internal pure returns (uint256 word, uint256 mask) {
         unchecked {
             word = nonce >> 8;          // nonce / 256
@@ -361,18 +298,10 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
         }
     }
 
-    /// @dev Enforce and track gas usage per block per caller
-    /// @param gasStart Gas available at function start
-    /// @param caller Address of the relayer
     function _enforceAndConsumeCallerGas(uint256 gasStart, address caller) internal {
         uint256 spent = gasStart - gasleft();
-        
-        unchecked {
-            // Safe: overhead is fixed at ~15k, spent is always < block gas limit
-            spent += gasAccountingOverhead;
-        }
+        unchecked { spent += gasAccountingOverhead; }
 
-        // Reset counter if new block
         if (_lastBlockForCaller[caller] != uint64(block.number)) {
             _lastBlockForCaller[caller] = uint64(block.number);
             _gasUsedThisBlock[caller] = 0;
@@ -380,12 +309,7 @@ contract PermissionedMetaTxHub is EIP712, Ownable, ReentrancyGuard {
 
         uint256 newTotal = _gasUsedThisBlock[caller] + spent;
         uint256 limit = gasLimitPerBlock[caller];
-        
-        // Enforce limit if set (0 = unlimited)
-        if (limit != 0 && newTotal > limit) {
-            revert BlockGasQuotaExceeded();
-        }
-        
+        if (limit != 0 && newTotal > limit) revert BlockGasQuotaExceeded();
         _gasUsedThisBlock[caller] = newTotal;
     }
 

@@ -1,111 +1,117 @@
-const { ethers } = require("hardhat");
+// scripts/deployStorageMeta.js
+import hre from "hardhat";
+import "dotenv/config";
+import {prepareForward,signForward,executeForward,getDeployedAddress,setLogging,hubAbi} from "../meta-exec-lib/src/index.js";
+
+setLogging(false);
+
+const { ethers } = hre;
+
+const HUB_ADDRESS = process.env.HUB_ADDRESS;   // PermissionedMetaTxHub contract address
+const RELAYER_PK = process.env.RELAYER_PK;     // Must be allowlisted in the Hub
+const SENDER_PK = process.env.SENDER_PK;       // Initial owner (user's EOA)
 
 async function main() {
-    console.log("Starting Storage contract deployment...");
-    
-    // Get the deployer account
-    const [deployer] = await ethers.getSigners();
-    console.log("Deploying with account:", deployer.address);
-    
-    // Get account balance
-    const balance = await ethers.provider.getBalance(deployer.address);
-    console.log("Account balance:", ethers.formatEther(balance), "ETH");
-    
-    // Get the contract factory
-    const Storage = await ethers.getContractFactory("Storage");
-    
-    console.log("Deploying Storage contract...");
-    
-    // Deploy the contract (no constructor parameters needed)
-    const storage = await Storage.deploy();
-    
-    // Wait for deployment to be mined
-    await storage.waitForDeployment();
-    
-    const contractAddress = await storage.getAddress();
-    
-    console.log("Storage deployed successfully!");
-    console.log("Contract address:", contractAddress);
-    console.log("Transaction hash:", storage.deploymentTransaction().hash);
-    console.log("Owner address:", deployer.address);
-    
-    // Get network information
-    const network = await ethers.provider.getNetwork();
-    console.log("Network:", network.name, "(" + network.chainId + ")");
-    
-    // Log gas used
-    const receipt = await storage.deploymentTransaction().wait();
-    console.log("Gas used:", receipt.gasUsed.toString());
-    
-    // Test basic functionality
-    console.log("\n🧪 Testing basic functionality...");
-    
-    // Store a number
-    console.log("Storing number 42...");
-    const storeTx = await storage.store(42);
-    await storeTx.wait();
-    console.log("Number stored successfully!");
-    
-    // Retrieve the number
-    const retrievedNumber = await storage.retrieve();
-    console.log("Retrieved number:", retrievedNumber.toString());
-    
-    // Test increment (owner only)
-    console.log("Incrementing number...");
-    const incrementTx = await storage.increment();
-    await incrementTx.wait();
-    
-    const newNumber = await storage.retrieve();
-    console.log("Number after increment:", newNumber.toString());
-    
-    // Verify contract on block explorer (if not on hardhat network)
-    if (network.chainId !== 31337n) {
-        console.log("\nTo verify the contract on the block explorer, run:");
-        console.log(`npx hardhat verify --network ${network.name} ${contractAddress}`);
-        
-        // Save deployment info to file
-        const deploymentInfo = {
-            contractName: "Storage",
-            address: contractAddress,
-            network: network.name,
-            chainId: network.chainId.toString(),
-            txHash: storage.deploymentTransaction().hash,
-            deployer: deployer.address,
-            owner: deployer.address,
-            timestamp: new Date().toISOString(),
-            gasUsed: receipt.gasUsed.toString(),
-            initialValue: "43" // After storing 42 and incrementing
-        };
-        
-        const fs = require('fs');
-        const path = require('path');
-        
-        const deploymentsDir = path.join(__dirname, '../deployments');
-        if (!fs.existsSync(deploymentsDir)) {
-            fs.mkdirSync(deploymentsDir, { recursive: true });
-        }
-        
-        const deploymentFile = path.join(deploymentsDir, `Storage-${network.name}.json`);
-        fs.writeFileSync(deploymentFile, JSON.stringify(deploymentInfo, null, 2));
-        console.log("📁 Deployment info saved to:", deploymentFile);
-    }
-    
-    console.log("\n Storage contract deployment completed successfully!");
-    console.log("\n Contract Summary:");
-    console.log("   • Address:", contractAddress);
-    console.log("   • Owner:", deployer.address);
-    console.log("   • Current stored value:", newNumber.toString());
-    console.log("\n Available functions:");
-    console.log("   • store(uint256) - Store a number (public)");
-    console.log("   • retrieve() - Get stored number (view)");
-    console.log("   • increment() - Increment by 1 (owner only)");
-    console.log("   • reset() - Reset to 0 (owner only)");
+  if (!HUB_ADDRESS || !RELAYER_PK || !SENDER_PK) {
+    throw new Error("Faltan env vars: HUB_ADDRESS, RELAYER_PK, SENDER_PK");
+  }
+
+  console.log("🚀 Deploying Storage (EIP-2771) via PermissionedMetaTxHub...\n");
+
+  // 1️⃣ Wallets
+  const provider = ethers.provider;
+  const relayer = new ethers.Wallet(RELAYER_PK, provider);
+  const sender = new ethers.Wallet(SENDER_PK, provider);
+
+  console.log("Relayer (caller):", relayer.address);
+  console.log("Sender  (signer):", sender.address);
+  console.log("Hub:", HUB_ADDRESS, "\n");
+
+  // 2️⃣ Storage bytecode with 2 constructor args (forwarder, owner)
+  const StorageFactory = await ethers.getContractFactory("Storage");
+
+  // Encode constructor args: (trustedForwarder, contractOwner)
+  const constructorArgs = ethers.AbiCoder.defaultAbiCoder().encode(
+    ["address", "address"],
+    [HUB_ADDRESS, sender.address]
+  );
+
+  // Combine bytecode + constructor args
+  const deployBytecode = StorageFactory.bytecode + constructorArgs.slice(2);
+
+  console.log(
+    "Storage bytecode length:",
+    (deployBytecode.length - 2) / 2,
+    "bytes"
+  );
+  console.log("Constructor args:");
+  console.log("  trustedForwarder:", HUB_ADDRESS);
+  console.log("  contractOwner:   ", sender.address);
+  
+  // 3️⃣ Prepare Forward for CREATE
+  const space = 0;
+  const nonce = Math.floor(Math.random() * 1_000_000);
+
+  const { domain, types, message, fTuple, callData } = await prepareForward({
+    provider,
+    metaAddress: HUB_ADDRESS,
+    hasCaller: true,
+    from: sender.address,
+    to: ethers.ZeroAddress, // CREATE deployment
+    value: 0n,
+    space,
+    nonce,
+    deadlineSec: 3600,
+    callData: deployBytecode,
+    caller: relayer.address,
+  });
+
+  console.log("📋 Forward prepared");
+  // console.log("  - from:", message.from);
+  // console.log("  - to:", message.to, "(CREATE)");
+  // console.log("  - nonce:", message.nonce.toString());
+  // console.log("  - caller:", message.caller);
+  // console.log();
+
+  // 4️⃣ Sign
+  const signature = await signForward(sender, domain, types, message);
+  console.log("✍️  Signature:", signature, "\n");
+
+  // 5️⃣ Execute
+  console.log("📡 Sending meta-tx to hub...");
+  const tx = await executeForward({
+    provider,
+    metaAddress: HUB_ADDRESS,
+    fTuple,
+    callData,
+    signature,
+    relayer,
+    hasCaller: true,
+    checkAllowlist: true,
+    overrides: {
+      gasLimit: 3_000_000,
+      value: 0n,
+    },
+  });
+
+  console.log("Tx hash:", tx.hash);
+  const receipt = await tx.wait();
+  console.log("✅ Tx mined in block:", receipt.blockNumber, "\n");
+
+  // 6️⃣ Get deployed contract address
+  const deployedAddress = getDeployedAddress(receipt, hubAbi.META_ABI);
+
+  if (!deployedAddress) {
+    console.log("⚠️  Could not find deployed address in the receipt.");
+    return;
+  }
+
+  console.log("🎉 Storage deployed at:", deployedAddress);
 }
 
 main()
-    .then(() => process.exit(0))
-    .catch((error) => {
-        console.error("Storage deployment failed:");
-        console.error(error);
-        process.exit(1);
-    });
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });

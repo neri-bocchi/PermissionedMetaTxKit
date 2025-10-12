@@ -1,20 +1,41 @@
+// meta-exec-lib/src/index.js
 import { ethers } from "ethers";
-import {
-  META_ABI,
-  EXECUTE_SIG
-} from "./abis.js";
+import { META_ABI, EXECUTE_SIG } from "./abis.js";
 
-/** Codifica calldata del contrato destino. */
-export function buildCallData(targetAbi, fnName, args) {
-  const iface = new ethers.Interface(Array.isArray(targetAbi) ? targetAbi : [targetAbi]);
-  return iface.encodeFunctionData(fnName, args);
+export const hubAbi = { META_ABI, EXECUTE_SIG };
+
+/* =====================================================
+   🔧 GLOBAL LOGGING CONTROL
+   ===================================================== */
+let ENABLE_LOGS = false; // ⬅️ Cambiá a false para silenciar todos los logs
+
+
+export function setLogging(enabled) {
+  ENABLE_LOGS = !!enabled;
 }
 
-/**
- * Prepara Forward + EIP-712.
- * - El nonce SIEMPRE debe venir dado por el usuario.
- * - `hasCaller = true` si el Forward incluye `caller` (tu versión pro).
- */
+function log(...args) {
+  if (ENABLE_LOGS) console.log(...args);
+}
+
+/* =====================================================
+   🧩 buildCallData
+   ===================================================== */
+export function buildCallData(targetAbi, fnName, args) {
+  log(`\n[buildCallData] fnName: ${fnName}`);
+  log(`args:`, args);
+
+  const iface = new ethers.Interface(Array.isArray(targetAbi) ? targetAbi : [targetAbi]);
+  const data = iface.encodeFunctionData(fnName, args);
+
+  log(`encoded data length: ${data.length}`);
+  log(`encoded data: ${data}`);
+  return data;
+}
+
+/* =====================================================
+   ⚙️ prepareForward
+   ===================================================== */
 export async function prepareForward({
   provider,
   metaAddress,
@@ -32,23 +53,35 @@ export async function prepareForward({
   caller
 }) {
   if (nonce === undefined || nonce === null)
-    throw new Error("El parámetro nonce es obligatorio (lo gestiona el usuario).");
-  if (!callData || callData === "0x") throw new Error("callData vacío");
+    throw new Error("The parameter 'nonce' is required.");
+  if (!callData || callData === "0x")
+    throw new Error("Empty callData.");
 
   const chainId = Number((await provider.getNetwork()).chainId);
   const metaAddr = ethers.getAddress(metaAddress);
-
   const dataHash = ethers.keccak256(callData);
-  
-  const finalDeadline = deadline !== undefined 
-    ? BigInt(deadline) 
-    : BigInt(Math.floor(Date.now() / 1000) + Number(deadlineSec || 600));
+  const finalDeadline =
+    deadline !== undefined
+      ? BigInt(deadline)
+      : BigInt(Math.floor(Date.now() / 1000) + Number(deadlineSec || 600));
 
-  const domain = { 
+  log(`\n[prepareForward]`);
+  log(`chainId: ${chainId}`);
+  log(`metaAddress: ${metaAddr}`);
+  log(`hasCaller: ${hasCaller}`);
+  log(`from: ${from}`);
+  log(`to: ${to}`);
+  log(`value: ${value}`);
+  log(`space: ${space}`);
+  log(`nonce: ${nonce}`);
+  log(`deadline: ${finalDeadline}`);
+  log(`dataHash: ${dataHash}`);
+
+  const domain = {
     name: domainName,
     version: domainVersion,
-    chainId, 
-    verifyingContract: metaAddr 
+    chainId,
+    verifyingContract: metaAddr
   };
 
   const types = {
@@ -82,26 +115,26 @@ export async function prepareForward({
     ? [from, to, value, space, BigInt(nonce), finalDeadline, dataHash, caller]
     : [from, to, value, space, BigInt(nonce), finalDeadline, dataHash];
 
-  return {
-    domain,
-    types,
-    message,
-    fTuple,
-    callData,
-    dataHash,
-    chainId,
-    EXECUTE_SIG
-  };
+  log(`Forward prepared ✅`);
+  log(`fTuple length: ${fTuple.length}`);
+
+  return { domain, types, message, fTuple, callData, dataHash, chainId, EXECUTE_SIG };
 }
 
-/** Firma EIP-712. */
-export function signForward(userWallet, domain, types, message) {
-  return userWallet.signTypedData(domain, types, message);
+/* =====================================================
+   ✍️ signForward
+   ===================================================== */
+export async function signForward(userWallet, domain, types, message) {
+  const signer = await userWallet.getAddress();
+  log(`\n[signForward] signer: ${signer}`);
+  const sig = await userWallet.signTypedData(domain, types, message);
+  log(`signature: ${sig}`);
+  return sig;
 }
 
-/**
- * Ejecuta la metatx con el relayer.
- */
+/* =====================================================
+   🚀 executeForward
+   ===================================================== */
 export async function executeForward({
   provider,
   metaAddress,
@@ -113,31 +146,38 @@ export async function executeForward({
   hasCaller = true,
   checkAllowlist = true
 }) {
-
-console.log("callData length:", callData.length);
-console.log("callData (hex):", callData);
-
-  const metaAddr   = ethers.getAddress(metaAddress);
+  const metaAddr = ethers.getAddress(metaAddress);
   const executeSig = EXECUTE_SIG;
-  const metaIface  = new ethers.Interface([`function ${executeSig} payable`]);
-  const metaAbi    = META_ABI;
-  const meta       = new ethers.Contract(metaAddr, metaAbi, provider);
+  const metaIface = new ethers.Interface([`function ${executeSig} payable`]);
+  const metaAbi = META_ABI;
+  const meta = new ethers.Contract(metaAddr, metaAbi, provider);
+
+  log(`\n[executeForward]`);
+  log(`hub: ${metaAddr}`);
+  log(`relayer: ${await relayer.getAddress()}`);
+  log(`fTuple length: ${fTuple.length}`);
+  log(`callData length: ${callData.length}`);
 
   const execData = metaIface.encodeFunctionData("execute", [fTuple, callData, signature]);
-  if (!execData || execData === "0x") throw new Error("execData vacío");
+  if (!execData || execData === "0x") throw new Error("Empty execData.");
 
   if (checkAllowlist && hasCaller && meta.interface.getFunction("isCallerAllowed")) {
     const caller = fTuple[fTuple.length - 1];
     const allowed = await meta.isCallerAllowed(caller);
-    if (!allowed) throw new Error(`caller ${caller} no permitido por MetaExecutor`);
+    log(`allowlist check: ${caller} → ${allowed}`);
+    if (!allowed) throw new Error(`Caller ${caller} not allowed`);
   }
 
-  const gasLimit = overrides.gasLimit ?? await provider.estimateGas({
-    from: await relayer.getAddress(),
-    to: metaAddr,
-    data: execData,
-    value: overrides.value ?? 0n
-  });
+  const gasLimit =
+    overrides.gasLimit ??
+    (await provider.estimateGas({
+      from: await relayer.getAddress(),
+      to: metaAddr,
+      data: execData,
+      value: overrides.value ?? 0n
+    }));
+
+  log(`gasLimit: ${gasLimit}`);
 
   const tx = await relayer.sendTransaction({
     to: metaAddr,
@@ -150,27 +190,28 @@ console.log("callData (hex):", callData);
     maxPriorityFeePerGas: overrides.maxPriorityFeePerGas
   });
 
+  log(`tx sent: ${tx.hash}`);
   return tx;
 }
 
-/**
- * Extrae la dirección del contrato deployado desde el receipt de una meta-tx CREATE.
- * @param {Object} receipt - Transaction receipt
- * @param {Array} hubAbi - ABI del hub (debe incluir el evento ContractDeployed)
- * @returns {string|null} Dirección del contrato deployado o null si no se encontró
- */
+/* =====================================================
+   📦 getDeployedAddress
+   ===================================================== */
 export function getDeployedAddress(receipt, hubAbi) {
+  log(`\n[getDeployedAddress]`);
   const hubInterface = new ethers.Interface(hubAbi);
-  
+
   const deployEvent = receipt.logs
-    .map((log) => {
+    .map((logItem) => {
       try {
-        return hubInterface.parseLog(log);
+        return hubInterface.parseLog(logItem);
       } catch {
         return null;
       }
     })
     .find((e) => e && e.name === "ContractDeployed");
 
-  return deployEvent ? deployEvent.args.deployed : null;
+  const address = deployEvent ? deployEvent.args.deployed : null;
+  log(`deployed address: ${address}`);
+  return address;
 }
