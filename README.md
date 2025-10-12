@@ -156,6 +156,19 @@ async function main() {
 main().catch(console.error);
 ```
 
+#### DAPP Sample
+
+This is an example of how to use PermissionedMetaTxHub on a DApp signing with Metamask
+
+![App Platorm](/howToUse/metamask/img/img1.png)
+![App Platorm](/howToUse/metamask/img/img2.png)
+![App Platorm](/howToUse/metamask/img/img4.png)
+![App Platorm](/howToUse/metamask/img/img3.png)
+
+
+
+How to create a DAPP with metamas sign EIP-712 and PermissionedMetaTxHub[`link`](/howToUse/metamask/readme.md)
+
 #### Typical Flow
 
 1. **User** prepares and signs a meta-transaction using their private key.
