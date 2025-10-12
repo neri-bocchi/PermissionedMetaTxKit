@@ -161,10 +161,10 @@ main().catch(console.error);
 This is an example of how to use PermissionedMetaTxHub on a DApp signing with Metamask
 
 <p align="center">
-  <img src="/howToUse/metamask/img/img1.png" width="100">
-  <img src="/howToUse/metamask/img/img2.png" width="100">
-  <img src="/howToUse/metamask/img/img4.png" width="100">
-  <img src="/howToUse/metamask/img/img3.png" width="100">
+  <img src="/howToUse/metamask/img/img1.png" width="300">
+  <img src="/howToUse/metamask/img/img2.png" width="300">
+  <img src="/howToUse/metamask/img/img4.png" width="300">
+  <img src="/howToUse/metamask/img/img3.png" width="300">
 </p>
 
 How to create a DAPP with metamas sign EIP-712 and PermissionedMetaTxHub[`link`](/howToUse/metamask/readme.md)
