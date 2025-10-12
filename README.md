@@ -30,12 +30,7 @@ ignition/                   # Ignition deployment modules
 
 3. Create a `.env` file with your keys and RPC:
 
-   ```
-   RPC_URL=...
-   RELAYER_PK=...
-   SENDER_PK=...
-   HUB_ADDRESS=... # Address of deployed PermissionedMetaTxHub
-   ```
+you can rename .env.example -> .env 
 
 ## Contract Deployment
 
@@ -48,6 +43,7 @@ ignition/                   # Ignition deployment modules
   ```
 
 - Deploy Storage:
+  (first you need to allow your Relayer address on the PermissionedMetaTxHub, in this example both are the same but you can use differents Private-Keys)
 
   ```sh
   npx hardhat run scripts/deployStorage.js --network amoy
