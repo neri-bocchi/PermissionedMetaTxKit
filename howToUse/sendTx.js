@@ -3,7 +3,7 @@ import { buildCallData, prepareForward, signForward, executeForward } from "../m
 import "dotenv/config";
 
 const HUB_ADDRESS = process.env.HUB_ADDRESS;
-const STORAGE_ADDRESS = "0x98F6431E1CcdEc19087e3cE497275B2296fE46E7";
+const STORAGE_ADDRESS = "0x98F6431E1CcdEc19087e3cE497275B2296fE46E7"; // Update with your deployed Storage address
 
 async function main() {
   // Setup

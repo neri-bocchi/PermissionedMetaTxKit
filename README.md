@@ -51,13 +51,6 @@ you can rename .env.example -> .env
 
 - Deployment metadata is saved in [`deployments/`](deployments/).
 
-### Using Ignition
-
-Example for Lock:
-
-```sh
-npx hardhat ignition deploy ./ignition/modules/Lock.js
-```
 
 ## Hub Administration
 
@@ -92,7 +85,8 @@ The [`meta-exec-lib`](meta-exec-lib/src/index.js) library provides utilities to 
 - [`prepareForward`](meta-exec-lib/src/index.js): Prepares the Forward struct and EIP-712 domain/types/message for signing.
 - [`signForward`](meta-exec-lib/src/index.js): Signs the Forward struct using EIP-712.
 - [`executeForward`](meta-exec-lib/src/index.js): Relayer executes the meta-transaction on-chain.
-
+- [`hubAbi`](meta-exec-lib/src/index.js): PermissionedMetaTx ABI
+  
 ### Example Usage
 
 See [`howToUse/sendTx.js`](howToUse/sendTx.js):
@@ -103,7 +97,7 @@ import { buildCallData, prepareForward, signForward, executeForward } from "../m
 import "dotenv/config";
 
 const HUB_ADDRESS = process.env.HUB_ADDRESS;
-const STORAGE_ADDRESS = "0x98F6431E1CcdEc19087e3cE497275B2296fE46E7";
+const STORAGE_ADDRESS = "0x98F6431E1CcdEc19087e3cE497275B2296fE46E7"; // Update with your deployed Storage address
 
 async function main() {
   // Setup
@@ -269,6 +263,7 @@ npx hardhat verify --network amoy <contractAddress>
 ## Resources & References
 
 - [PermissionedMetaTxHub.sol](contracts/PermissionedMetaTxHub.sol)
+- [Storage.sol](contracts/Storage.sol)
 - [meta-exec-lib/src/index.js](meta-exec-lib/src/index.js)
 - [deployPermissionedMetaTxHub.js](scripts/deployPermissionedMetaTxHub.js)
 - [deployStorage.js](scripts/deployStorage.js)
