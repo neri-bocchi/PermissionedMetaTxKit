@@ -22,7 +22,7 @@ async function main() {
   const caller = ethers.getAddress(argCaller ?? owner.address);
   const limit = argLimit ? BigInt(argLimit) : 0n; // 0 = no limit
 
-  // MetaExecutor address (update here if needed)
+  // PermissionedMetaTxHub address (update here if needed)
   const metaAddr = ethers.getAddress(process.env.HUB_ADDRESS);
 
   const metaAbi = [

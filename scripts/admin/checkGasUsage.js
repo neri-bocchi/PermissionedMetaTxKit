@@ -17,7 +17,7 @@ async function main() {
   const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
   const caller = ethers.getAddress(argCaller ?? wallet.address);
 
-  // MetaExecutor address
+  // PermissionedMetaTxHub address
   const metaAddr = ethers.getAddress("0x094815651AEe2CC0ea2445C34fc327323165025a");
 
   const metaAbi = [
@@ -29,7 +29,7 @@ async function main() {
   const meta = new ethers.Contract(metaAddr, metaAbi, provider);
 
   console.log("Caller address   :", caller);
-  console.log("MetaExecutor     :", metaAddr);
+  console.log("PermissionedMetaTxHub     :", metaAddr);
   console.log("Current block    :", await provider.getBlockNumber());
   
   // Get gas usage info

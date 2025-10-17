@@ -167,6 +167,8 @@ This is an example of how to use PermissionedMetaTxHub on a DApp signing with Me
   <img src="/howToUse/metamask/img/img3.png" width="300">
 </p>
 
+
+
 How to create a DAPP with metamas sign EIP-712 and PermissionedMetaTxHub[`link`](/howToUse/metamask/readme.md)
 
 #### Typical Flow
