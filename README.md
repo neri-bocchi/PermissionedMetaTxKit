@@ -3,7 +3,7 @@
 This project implements an advanced system for EIP-712 meta-transaction execution on Ethereum, featuring permission control, flexible nonce management, relayer allowlist, and per-block gas quotas. It includes smart contracts, deployment/admin scripts, and a client library.
 
 ## Live Demo
-Mint Gasless NFT Token on this Demo: [HalloweenSpooks](https://halloweebspooks.webnauta.xyz) 
+Mint Gasless NFT Token on this Demo: [HalloweenSpooks](https://halloweenspooks.webnauta.xyz) 
 
 ## Project Structure
 
