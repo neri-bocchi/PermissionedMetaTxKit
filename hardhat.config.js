@@ -16,10 +16,21 @@ export default {
       url: process.env.RPC_URL || "https://rpc-amoy.polygon.technology/",
       accounts: process.env.RELAYER_PK ? [process.env.RELAYER_PK] : [],
       chainId: 80002,
-      // ✅ usa number o string, NO BigInt:
-      gasPrice: 30_000_000_000,       // number en wei (30 gwei)
-      // o: gasPrice: "30000000000",
-      // o simplemente: omite gasPrice y deja "auto"
+      gasPrice: 25_000_000_000,   
+    },
+    lnettest: {
+      url: process.env.RPC_URL || "http://35.185.112.219:4545",
+      accounts: process.env.RELAYER_PK ? [process.env.RELAYER_PK] : [],
+      chainId: 648540,
+      gasPrice: 0,
+      type: 0,
+    },
+    lnetmain: {
+      url: process.env.RPC_URL || "http://34.73.228.200:4545",
+      accounts: process.env.RELAYER_PK ? [process.env.RELAYER_PK] : [],
+      chainId: 648541,
+      gasPrice: 0,
+      type: 0,
     },
   },
 };

@@ -58,7 +58,15 @@ async function main() {
   }
 
   console.log("Setting gas limit per block...");
-  const tx = await meta.setGasLimitPerBlock(caller, limit);
+  var txOptions = {}; 
+  if (process.env.NETWORK === "LNET") {
+  txOptions = { 
+      gasPrice: 0, 
+      type: 0,
+      gasLimit: 4_000_000}
+  }
+  
+  const tx = await meta.setGasLimitPerBlock(caller, limit, txOptions);
   console.log("tx:", tx.hash);
   await tx.wait();
 

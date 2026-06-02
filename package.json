@@ -10,13 +10,23 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@openzeppelin/contracts": "5.0.0",
+    "@openzeppelin/contracts": "^5.4.0",
+    "@openzeppelin/contracts-upgradeable": "^5.4.0",
+    "commander": "^14.0.1",
     "dotenv": "^17.2.3",
     "ethers": "^6.15.0",
-    "proper-lockfile": "^4.1.2"
+    "proper-lockfile": "^4.1.2",
+    "viem": "^2.38.3"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
-    "hardhat": "^2.22.5"
+    "@nomicfoundation/hardhat-verify": "^3.0.8",
+    "@openzeppelin/hardhat-upgrades": "^1.2.1",
+    "@types/node": "^24.9.0",
+    "hardhat": "^2.22.5",
+    "hardhat-deploy": "^0.12.4",
+    "hardhat-deploy-ethers": "^0.4.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   }
 }
