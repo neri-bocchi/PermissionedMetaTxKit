@@ -95,6 +95,5 @@ main()
     } else {
       console.log('Error data is null, cannot decode specific error name.');
     }
-    console.log('Nombre del error:', decodedError.name);
     process.exit(1);
   });

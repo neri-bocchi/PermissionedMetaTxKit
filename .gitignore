@@ -17,3 +17,6 @@ node_modules
 ignition/deployments/chain-31337
 
 .DS_Store
+
+# Runtime state (nonce tracking for relayer scripts)
+nonce.json
