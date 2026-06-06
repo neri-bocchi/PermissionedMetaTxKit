@@ -17,7 +17,8 @@ npm install                                                          # install d
 npx hardhat compile                                                  # compile contracts
 npx hardhat test                                                     # run tests (note: test/*.test.js are currently empty stubs)
 npx hardhat test test/PermissionedMetaTxHub.test.js                 # run a single test file
-npx hardhat run scripts/deployPermissionedMetaTxHub.js --network amoy   # deploy the hub
+npx hardhat run scripts/deployMetaTxForwarder.js --network amoy        # deploy the production hub (MetaTxForwarder.sol)
+npx hardhat run scripts/deployPermissionedMetaTxHub.js --network amoy   # deploy the reduced PermissionedMetaTxHub variant
 npx hardhat run scripts/deployStorage.js --network amoy             # deploy the example Storage contract
 npx hardhat verify --network amoy <contractAddress>                 # verify on block explorer
 ```
@@ -44,9 +45,16 @@ Scripts read config from `.env` (copy `.env.example`). Per-network presets exist
 
 ## Architecture
 
-### The hub: `contracts/PermissionedMetaTxHub.sol`
+### The hub: `contracts/MetaTxForwarder.sol`
 
-This is the production contract (`EIP712 + Ownable + ReentrancyGuard`). The other `MetaTxForwarder*.sol` files are earlier/experimental variants — when working on meta-tx logic, target `PermissionedMetaTxHub.sol` unless told otherwise. `Storage.sol` is only a demo target for tests.
+**`MetaTxForwarder.sol` is the production/final contract** (`EIP712 + Ownable + ReentrancyGuard`) — confirmed by the developer and by the fact that the entire `scripts/admin/` suite and the Go CLI target its ABI (see below), and that it carries the audit fixes (`FIX H-02`, `FIX M-01`). When working on meta-tx logic, target `MetaTxForwarder.sol` unless told otherwise. `Storage.sol` is only a demo target for tests.
+
+The other contracts are **variants, not the production path**:
+- `PermissionedMetaTxHub.sol` — a reduced variant: it has the core meta-tx flow but **lacks the deployer-allowlist and per-deployer gas-bucket layer** (`setAllowedDeployer`, `getAllowedDeployers`, `getDeployerInfo`, `setDeployerBucketConfig`, `deployGasWindowState`, caller/deployer enumeration). The admin scripts and Go CLI call those functions, so they only work against `MetaTxForwarder`.
+- `MetaTxForwarderv1.sol` — earlier generation (also declares `contract MetaTxForwarder`; name collides with the production file, so deploy scripts disambiguate via FQN).
+- `MetaTxForwarderUpgradeable.sol` + `MetaTxForwarderProxy.sol` — a UUPS-upgradeable variant and its ERC1967 proxy.
+
+> **Naming trap:** all of these contracts declare the *same* EIP-712 domain `EIP712("PermissionedMetaTxHub", "1")`. So `"PermissionedMetaTxHub"` is the product/domain name shared by the whole family, **not** an identifier of a specific contract file — the off-chain clients (`meta-exec-lib`, Go CLI) sign with that domain name regardless of which file is deployed. What distinguishes the production contract is its **function ABI** (the deployer/bucket layer above), not the domain string.
 
 `execute(Forward f, bytes data, bytes signature)` enforces, in order:
 1. **Caller allowlist** — `msg.sender` must be in `isCallerAllowed`, and `f.caller` must equal `msg.sender`. The relayer is trusted and powerful by design.
@@ -54,8 +62,10 @@ This is the production contract (`EIP712 + Ownable + ReentrancyGuard`). The othe
 3. **Signature** via `_validateSignature`: EOA path uses `ECDSA.recover`; if `f.from` has code, it uses the ERC-1271 `isValidSignature` path.
 4. **Replay protection** — both a `usedDigest[digest]` flag and the bitmap nonce.
 5. **ETH value** — `msg.value == f.value`.
-6. **Dispatch** — `f.to == address(0)` does a `CREATE` deploy (`_executeCreate`); otherwise `_executeCall`.
+6. **Dispatch** — `f.to == address(0)` does a `CREATE` deploy (`_executeCreate`, which delegates to an auxiliary `DeployProxy` contract deployed in the constructor — `FIX H-02`); otherwise `_executeCall`.
 7. **Per-block gas quota** — `_enforceAndConsumeCallerGas` charges measured gas + `gasAccountingOverhead` against the caller's `gasLimitPerBlock`, resetting the counter each new block.
+
+**Deployer allowlist & gas buckets (production-only):** beyond the per-caller gas quota, `MetaTxForwarder` gates CREATE deploys through a separate `allowedDeployers` allowlist and a per-deployer gas-bucket window (default bucket + per-deployer overrides via `setDeployerBucketConfig`). `getDeployerInfo` / `deployGasWindowState` expose the live state. This whole layer is what `scripts/admin/` and the Go CLI operate on, and is **absent from `PermissionedMetaTxHub.sol`**.
 
 **Bitmap nonces:** nonces are `(user, space, nonce)` triples stored as bits (`noncesUsed[user][space][word] & mask`, where `word = nonce >> 8`, `bit = nonce & 0xff`). This allows arbitrary, out-of-order, parallel nonces — independent of the Ethereum network nonce. Sequential ordering, if needed, must be enforced client-side.
 
