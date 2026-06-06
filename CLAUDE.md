@@ -49,10 +49,9 @@ Scripts read config from `.env` (copy `.env.example`). Per-network presets exist
 
 **`MetaTxForwarder.sol` is the production/final contract** (`EIP712 + Ownable + ReentrancyGuard`) — confirmed by the developer and by the fact that the entire `scripts/admin/` suite and the Go CLI target its ABI (see below), and that it carries the audit fixes (`FIX H-02`, `FIX M-01`). When working on meta-tx logic, target `MetaTxForwarder.sol` unless told otherwise. `Storage.sol` is only a demo target for tests.
 
-The other contracts are **variants, not the production path**:
-- `PermissionedMetaTxHub.sol` — a reduced variant: it has the core meta-tx flow but **lacks the deployer-allowlist and per-deployer gas-bucket layer** (`setAllowedDeployer`, `getAllowedDeployers`, `getDeployerInfo`, `setDeployerBucketConfig`, `deployGasWindowState`, caller/deployer enumeration). The admin scripts and Go CLI call those functions, so they only work against `MetaTxForwarder`.
-- `MetaTxForwarderv1.sol` — earlier generation (also declares `contract MetaTxForwarder`; name collides with the production file, so deploy scripts disambiguate via FQN).
-- `MetaTxForwarderUpgradeable.sol` + `MetaTxForwarderProxy.sol` — a UUPS-upgradeable variant and its ERC1967 proxy.
+`PermissionedMetaTxHub.sol` is a **variant, not the production path** — a reduced/older version: it has the core meta-tx flow but **lacks the deployer-allowlist and per-deployer gas-bucket layer** (`setAllowedDeployer`, `getAllowedDeployers`, `getDeployerInfo`, `setDeployerBucketConfig`, `deployGasWindowState`, caller/deployer enumeration) and the audit fixes. The admin scripts and Go CLI call those functions, so they only work against `MetaTxForwarder`. Its `Forward`/`FORWARD_TYPEHASH` are identical to the production contract, so off-chain signing clients are compatible with both.
+
+> Earlier variants were removed during cleanup: `MetaTxForwarderv1.sol` (the first forwarder generation) and the abandoned UUPS branch (`MetaTxForwarderUpgradeable.sol` + `MetaTxForwarderProxy.sol` + `scripts/deploy-proxy.js` + `scripts/upgrade-proxy.js`) — all strict subsets of `MetaTxForwarder.sol` predating its audit fixes.
 
 > **Naming trap:** all of these contracts declare the *same* EIP-712 domain `EIP712("PermissionedMetaTxHub", "1")`. So `"PermissionedMetaTxHub"` is the product/domain name shared by the whole family, **not** an identifier of a specific contract file — the off-chain clients (`meta-exec-lib`, Go CLI) sign with that domain name regardless of which file is deployed. What distinguishes the production contract is its **function ABI** (the deployer/bucket layer above), not the domain string.
 
