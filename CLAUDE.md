@@ -31,7 +31,7 @@ node scripts/admin/setupGasLimit.js <callerAddress> <limit>   # set per-block ga
 node scripts/admin/checkGasUsage.js <callerAddress>           # read current gas usage
 ```
 
-Go CLI (`cli/` is the full module):
+Go CLI (`cli/` is the full module) — full reference in [`docs/cli.md`](docs/cli.md):
 ```sh
 cd cli && go build -o pmtxhub
 ./pmtxhub view caller 0xRELAYER
@@ -80,3 +80,4 @@ Solidity `0.8.24`, optimizer 200 runs, **`viaIR: true`**, and **`metadata.byteco
 - `howToUse/` — runnable usage examples, including a MetaMask DApp walkthrough (`howToUse/metamask/`).
 - `deployments/` — per-network deployment metadata JSON written by the deploy scripts.
 - `audit.md` — security audit notes for the hub.
+- `docs/cli.md` — full reference for the Go admin CLI (`cli/pmtxhub`).
