@@ -9,6 +9,13 @@ Herramienta de línea de comandos en **Go** para **administrar y operar** el con
 - Es el **equivalente en Go del flujo off-chain** que la librería JS (`meta-exec-lib/src/index.js`)
   realiza: cubre el ciclo completo de una meta-transacción **consultar → administrar → firmar → ejecutar**.
 
+> **Nota sobre el nombre del contrato:** el CLI se refiere al contrato como `PermissionedMetaTxHub`
+> (constante `DomainName` y dominio EIP-712), pero ese es el **nombre del producto/dominio**, no el del
+> archivo de contrato. El **contrato de producción real es `contracts/MetaTxForwarder.sol`** — el ABI que
+> usa el CLI (`allowedDeployers`, `setAllowedDeployer`, `deployGasWindowState`, `setDeployGasBucketConfig`,
+> etc.) corresponde a `MetaTxForwarder.sol`, no a la variante reducida `PermissionedMetaTxHub.sol` (que
+> carece de esas funciones). Ver la sección *Architecture* de `CLAUDE.md`.
+
 > Nota: anteriormente existía una copia vieja `cli.go` en la raíz del repo; fue eliminada por estar
 > desactualizada y no compilar (no había `go.mod` en la raíz). El módulo válido es **`cli/`**.
 
