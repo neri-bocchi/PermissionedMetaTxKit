@@ -19,7 +19,7 @@ ignition/                   # Ignition deployment modules
 
 ## Main Contracts
 
-- [`PermissionedMetaTxHub.sol`](contracts/PermissionedMetaTxHub.sol): Coordination hub for EIP-712 meta-transactions, relayer control, bitmap nonces, signature cancellation, ERC-1271 validation, and per-block gas quotas.
+- [`MetaTxForwarder.sol`](contracts/MetaTxForwarder.sol): Coordination hub for EIP-712 meta-transactions, relayer control, bitmap nonces, signature cancellation, ERC-1271 validation, per-block gas quotas, and the deployer allowlist / gas-bucket layer. This is the production contract (its EIP-712 domain is `"PermissionedMetaTxHub"`).
 - [`Storage.sol`](contracts/Storage.sol): Example contract to store and retrieve a number, used for tests and demos.
 
 ## Installation
@@ -39,14 +39,14 @@ you can rename .env.example -> .env
 
 ### Using Hardhat
 
-- Deploy PermissionedMetaTxHub:
+- Deploy the hub (MetaTxForwarder):
 
   ```sh
-  npx hardhat run scripts/deployPermissionedMetaTxHub.js --network amoy
+  npx hardhat run scripts/deployMetaTxForwarder.js --network amoy
   ```
 
 - Deploy Storage:
-  (first you need to allow your Relayer address on the PermissionedMetaTxHub, in this example both are the same but you can use differents Private-Keys)
+  (first you need to allow your Relayer address on the hub, in this example both are the same but you can use differents Private-Keys)
 
   ```sh
   npx hardhat run scripts/deployStorage.js --network amoy
@@ -80,7 +80,7 @@ you can rename .env.example -> .env
 
 ## Client Library: meta-exec-lib
 
-The [`meta-exec-lib`](meta-exec-lib/src/index.js) library provides utilities to build, sign, and send EIP-712 meta-transactions compatible with [`PermissionedMetaTxHub.sol`](contracts/PermissionedMetaTxHub.sol).
+The [`meta-exec-lib`](meta-exec-lib/src/index.js) library provides utilities to build, sign, and send EIP-712 meta-transactions compatible with [`MetaTxForwarder.sol`](contracts/MetaTxForwarder.sol).
 
 ### Main Functions
 
@@ -177,7 +177,7 @@ How to create a DAPP with metamas sign EIP-712 and PermissionedMetaTxHub[`link`]
 #### Typical Flow
 
 1. **User** prepares and signs a meta-transaction using their private key.
-2. **Relayer** receives the signed meta-tx and submits it to [`PermissionedMetaTxHub.sol`](contracts/PermissionedMetaTxHub.sol).
+2. **Relayer** receives the signed meta-tx and submits it to [`MetaTxForwarder.sol`](contracts/MetaTxForwarder.sol).
 3. The hub contract validates the signature, nonce, relayer allowlist, and gas quota before executing the target contract call.
 
 #### Advanced Features
@@ -190,7 +190,7 @@ How to create a DAPP with metamas sign EIP-712 and PermissionedMetaTxHub[`link`]
 
 ## Main Scripts
 
-- [`deployPermissionedMetaTxHub.js`](scripts/deployPermissionedMetaTxHub.js): Deploys the hub and saves metadata.
+- [`deployMetaTxForwarder.js`](scripts/deployMetaTxForwarder.js): Deploys the hub and saves metadata.
 - [`deployStorage.js`](scripts/deployStorage.js): Deploys Storage and tests basic functions.
 - [`admin/setupCallerAllowlist.js`](scripts/admin/setupCallerAllowlist.js): Adds relayers to the allowlist. Set `.env` HUB_ADDRESS to the deployed PermissionedMetaTxHub address.
 - [`admin/setupGasLimit.js`](scripts/admin/setupGasLimit.js): Sets gas limits.
@@ -267,7 +267,7 @@ If your application requires strict ordering (like the network nonce), you can i
 - The network nonce is strict and sequential, used for direct Ethereum transactions.
 - You can implement sequential flows in RelayHub by managing nonces on the client side.
 
-For more details, see the contract [`PermissionedMetaTxHub.sol`](contracts/PermissionedMetaTxHub.sol) and the client library usage examples.
+For more details, see the contract [`MetaTxForwarder.sol`](contracts/MetaTxForwarder.sol) and the client library usage examples.
 
 
 ## Contract Verification
@@ -280,10 +280,10 @@ npx hardhat verify --network amoy <contractAddress>
 
 ## Resources & References
 
-- [PermissionedMetaTxHub.sol](contracts/PermissionedMetaTxHub.sol)
+- [MetaTxForwarder.sol](contracts/MetaTxForwarder.sol)
 - [Storage.sol](contracts/Storage.sol)
 - [meta-exec-lib/src/index.js](meta-exec-lib/src/index.js)
-- [deployPermissionedMetaTxHub.js](scripts/deployPermissionedMetaTxHub.js)
+- [deployMetaTxForwarder.js](scripts/deployMetaTxForwarder.js)
 - [deployStorage.js](scripts/deployStorage.js)
 - [howToUse/sendTx.js](howToUse/sendTx.js)
 

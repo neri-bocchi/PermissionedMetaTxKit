@@ -13,8 +13,7 @@ Herramienta de línea de comandos en **Go** para **administrar y operar** el con
 > (constante `DomainName` y dominio EIP-712), pero ese es el **nombre del producto/dominio**, no el del
 > archivo de contrato. El **contrato de producción real es `contracts/MetaTxForwarder.sol`** — el ABI que
 > usa el CLI (`allowedDeployers`, `setAllowedDeployer`, `deployGasWindowState`, `setDeployGasBucketConfig`,
-> etc.) corresponde a `MetaTxForwarder.sol`, no a la variante reducida `PermissionedMetaTxHub.sol` (que
-> carece de esas funciones). Ver la sección *Architecture* de `CLAUDE.md`.
+> etc.) corresponde a `MetaTxForwarder.sol`. Ver la sección *Architecture* de `CLAUDE.md`.
 
 > Nota: anteriormente existía una copia vieja `cli.go` en la raíz del repo; fue eliminada por estar
 > desactualizada y no compilar (no había `go.mod` en la raíz). El módulo válido es **`cli/`**.
@@ -229,7 +228,7 @@ type Forward struct {
 El ABI embebido en el CLI (`hubABIJSON`) y el tipo `Forward` deben mantenerse **byte-a-byte**
 sincronizados con:
 
-- El `FORWARD_TYPEHASH` y la firma de `execute` en `contracts/PermissionedMetaTxHub.sol`.
+- El `FORWARD_TYPEHASH` y la firma de `execute` en `contracts/MetaTxForwarder.sol`.
 - Los `types` / `fTuple` de `prepareForward` y el `META_ABI` / `EXECUTE_SIG` en `meta-exec-lib/`.
 
 Cualquier cambio en la estructura `Forward` (campos, orden, tipos) obliga a actualizar **las tres**
