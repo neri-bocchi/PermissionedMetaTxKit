@@ -1,0 +1,29 @@
+# Foundry — convive con Hardhat (no lo reemplaza).
+# Compila los MISMOS contracts/ que Hardhat y replica sus settings de compilador
+# para que el bytecode no diverja. Claves heredadas de hardhat.config.js:
+#   solc 0.8.24 · optimizer 200 runs · via_ir · bytecode_hash = "none".
+[profile.default]
+src            = "contracts"
+out            = "out"
+libs           = ["lib", "node_modules"]   # forge-std (submódulo) + OpenZeppelin (npm)
+test           = "test/foundry"            # los tests JS de Hardhat siguen en test/*.test.js
+script         = "script"
+cache_path     = "cache_forge"             # NO usar "cache": colisiona con el /cache de Hardhat
+
+solc           = "0.8.24"
+optimizer      = true
+optimizer_runs = 200
+via_ir         = true
+bytecode_hash  = "none"
+evm_version    = "paris"                   # = el default de Hardhat 2.x (sin PUSH0); pin para que el bytecode NO diverja
+
+fs_permissions = [{ access = "read", path = "./" }]
+
+# Redes donde Foundry SÍ puede desplegar (EVM estándar).
+# LACNet (lnettest 648540 / lnetmain 648541, gasPrice 0 + tx legacy type 0) se
+# despliegan con ethers/Hardhat — ver scripts/deployMetaTxForwarder.js.
+[rpc_endpoints]
+amoy = "${RPC_URL}"
+
+[etherscan]
+amoy = { key = "${ETHERSCAN_API_KEY}", chain = 80002 }

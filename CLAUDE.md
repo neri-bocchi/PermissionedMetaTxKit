@@ -24,6 +24,19 @@ npx hardhat verify --network amoy <contractAddress>                 # verify on 
 
 `package.json`'s `npm test` is a placeholder that errors — always use `npx hardhat test`.
 
+### Foundry (coexists with Hardhat)
+
+Foundry handles **compile + Solidity testing**, and **deploy on EVM-standard networks (amoy)**. Hardhat keeps **deploy/verify on LACNet** (lnettest/lnetmain — `gasPrice 0` + legacy `type 0`, where `forge` fails), the existing JS tests, and is what the admin scripts/CLI ecosystem assumes.
+
+```sh
+forge build                                                          # compile contracts/ (out/, cache_forge/)
+forge test -vv                                                       # run Solidity tests in test/foundry/*.t.sol
+forge script script/DeployMetaTxForwarder.s.sol:DeployMetaTxForwarder \
+  --rpc-url amoy --private-key 0x$RELAYER_PK --broadcast --verify    # deploy hub on amoy (Foundry)
+```
+
+`foundry.toml` mirrors `hardhat.config.js`'s compiler settings exactly — **including `evm_version = "paris"`** (Hardhat 2.x's default; *not* solc 0.8.24's `shanghai`). This was verified: `MetaTxForwarder`/`Storage` runtime bytecode is byte-identical under both tools. Changing `evm_version` (or any compiler setting) in one file without the other will make deployed/verified bytecode diverge. OpenZeppelin is shared via `remappings.txt` → `node_modules` (single source of truth); `forge-std` is a git submodule in `lib/`. Foundry deploy scripts live in `script/` (singular) — distinct from the node scripts in `scripts/` (plural). Private keys in `.env` lack the `0x` prefix, so `forge` invocations prepend it (`0x$RELAYER_PK`).
+
 Admin scripts under `scripts/admin/` are plain node scripts (not `hardhat run`), e.g.:
 ```sh
 node scripts/admin/setupCallerAllowlist.js <relayerAddress>   # allowlist a relayer (owner-only)
